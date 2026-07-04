@@ -18,6 +18,11 @@ const allowedOverridePrefixes = [
 ];
 
 export function buildLayoutRequest(article: ArticleAst): ChatCompletionRequest {
+  const styleOptions = stylePresets
+    .map((preset) => `${preset.id}｜${preset.name}｜${preset.moods.join("、")}`)
+    .join("\n");
+  const articleMarkdown = astToMarkdown(article).slice(0, 3000);
+
   return {
     model: "openai-compatible-chat-model",
     temperature: 0.3,
@@ -30,7 +35,7 @@ export function buildLayoutRequest(article: ArticleAst): ChatCompletionRequest {
       },
       {
         role: "user",
-        content: `请根据文章调性选择最适合的版式。\n可选 styleId：${Array.from(allowedStyleIds).join(", ")}\n返回示例：{"styleId":"listicle_cards","reason":"...","overrides":{"palette.primary":"#2B6CB0"}}\n文章：\n${astToMarkdown(article)}`,
+        content: `请根据文章调性选择最适合的版式。\n可选 styleId｜名称｜moods：\n${styleOptions}\n返回示例：{"styleId":"listicle_cards","reason":"...","overrides":{"palette.primary":"#2B6CB0"}}\n文章：\n${articleMarkdown}`,
       },
     ],
   };

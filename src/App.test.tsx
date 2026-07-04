@@ -49,4 +49,32 @@ describe("App", () => {
     expect(screen.getAllByRole("button", { name: "复制到排版台" }).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByRole("button", { name: "AI 智能排版" }).length).toBeGreaterThanOrEqual(1);
   });
+
+  it("uses a custom target word count and removes redundant content actions", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: "写作台" }));
+
+    const wordsInput = screen.getByRole("spinbutton", { name: "目标字数" });
+    await userEvent.clear(wordsInput);
+    await userEvent.type(wordsInput, "1234");
+
+    expect(wordsInput).toHaveValue(1234);
+    expect(screen.queryByText("内容操作")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "润色" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the layout workbench empty until the writer copies content into it", async () => {
+    render(<App />);
+
+    expect(screen.getByText("排版台还没有内容")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制到公众号" })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: "写作台" }));
+    await userEvent.click(screen.getAllByRole("button", { name: "复制到排版台" })[0]);
+
+    expect(screen.queryByText("排版台还没有内容")).not.toBeInTheDocument();
+    expect(screen.getByText("所见即所得版面")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "复制到公众号" })).not.toBeDisabled();
+  });
 });

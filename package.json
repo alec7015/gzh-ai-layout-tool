@@ -16,6 +16,8 @@
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tiptap/core": "^3.27.1",
     "@tiptap/extension-table": "^3.27.1",
+    "@tiptap/extension-text-align": "^3.27.1",
+    "@tiptap/extension-text-style": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@vitejs/plugin-react": "^5.1.1",

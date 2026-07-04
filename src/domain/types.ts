@@ -9,13 +9,18 @@ export type BlockType =
   | "table"
   | "divider";
 
-export type TextMark = "bold" | "italic" | "emphasis";
+export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike";
 
 export type BlockOverride = Record<string, string | number | boolean | null>;
 
 export interface TextRun {
   text: string;
   marks?: TextMark[];
+  attrs?: {
+    color?: string;
+    background?: string;
+    fontSize?: string;
+  };
 }
 
 export interface BaseBlock {
@@ -152,6 +157,7 @@ export interface StylePreset {
   decorations: {
     header: string | null;
     footer: string | null;
+    footerText?: string;
     sectionOrnament: string | null;
   };
 }

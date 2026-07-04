@@ -75,4 +75,37 @@ describe("WeChat renderer", () => {
     expect(html).not.toContain("<style");
     expect(html).not.toContain("<script");
   });
+
+  it("renders text run attrs and extended marks as inline WeChat styles", () => {
+    const preset = stylePresets.find((item) => item.id === "minimal_editorial");
+    expect(preset).toBeDefined();
+
+    const html = renderWechatHtml(
+      {
+        meta: { title: "行内样式" },
+        blocks: [
+          { id: "title-1", type: "title", text: "行内样式", style: {} },
+          {
+            id: "p-1",
+            type: "paragraph",
+            runs: [
+              {
+                text: "彩色重点",
+                marks: ["bold", "underline", "strike"],
+                attrs: { color: "#dc2626", background: "#fef3c7", fontSize: "18px" },
+              },
+            ],
+            style: {},
+          },
+        ],
+      },
+      preset!
+    );
+
+    expect(html).toContain("color:#dc2626");
+    expect(html).toContain("background-color:#fef3c7");
+    expect(html).toContain("font-size:18px");
+    expect(html).toContain("text-decoration:line-through");
+    expect(html).toContain("text-decoration:underline");
+  });
 });

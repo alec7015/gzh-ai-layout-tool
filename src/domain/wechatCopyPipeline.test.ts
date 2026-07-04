@@ -26,22 +26,20 @@ describe("inlineExternalImages", () => {
   it("converts external images to data URLs before copying", async () => {
     const box = document.createElement("div");
     box.innerHTML = '<img src="https://example.com/a.png" />';
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(new Response("abc", { headers: { "Content-Type": "image/png" } }))
-    );
+    const fetcher = vi.fn().mockResolvedValue(new Blob(["abc"], { type: "image/png" }));
 
-    await inlineExternalImages(box);
+    await inlineExternalImages(box, fetcher);
 
+    expect(fetcher).toHaveBeenCalledWith("https://example.com/a.png");
     expect(box.querySelector("img")?.getAttribute("src")).toMatch(/^data:image\/png;base64,/);
   });
 
   it("keeps the original URL when an external image cannot be fetched", async () => {
     const box = document.createElement("div");
     box.innerHTML = '<img src="https://example.com/missing.png" />';
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("cors")));
+    const fetcher = vi.fn().mockRejectedValue(new Error("cors"));
 
-    await inlineExternalImages(box);
+    await inlineExternalImages(box, fetcher);
 
     expect(box.querySelector("img")?.getAttribute("src")).toBe("https://example.com/missing.png");
   });

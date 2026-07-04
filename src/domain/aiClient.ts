@@ -139,10 +139,14 @@ export function safeJsonParse<T>(input: string): T | null {
 }
 
 function buildRequestBody(settings: AiSettings, request: ChatCompletionRequest): Record<string, unknown> {
+  const requestedMaxTokens =
+    typeof request.max_tokens === "number" && Number.isFinite(request.max_tokens)
+      ? request.max_tokens
+      : settings.maxTokens;
   const body: Record<string, unknown> = {
     ...request,
     model: request.model === "openai-compatible-chat-model" ? settings.model : request.model,
-    max_tokens: settings.maxTokens,
+    max_tokens: Math.max(settings.maxTokens, requestedMaxTokens),
   };
 
   if (!shouldOmitTemperature(settings)) {

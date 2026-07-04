@@ -1,16 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildWritingRequest,
-  buildRewriteRequest,
   buildSmartFormatRequest,
-  buildTitleRequest,
   coerceMarkdownArticle,
   createDigest,
   generateDraftLocally,
   protectArticleImagesForAi,
-  rewriteSelectionLocally,
   restoreProtectedImages,
-  suggestTitles,
 } from "./aiWriting";
 import type { ArticleAst } from "./types";
 
@@ -32,6 +28,16 @@ describe("aiWriting", () => {
     expect(request.response_format).toBeUndefined();
   });
 
+  it("clamps requested writing words and scales max tokens for long drafts", () => {
+    const tooSmall = buildWritingRequest({ topic: "测试", style: "清晰", words: 10 });
+    const tooLarge = buildWritingRequest({ topic: "测试", style: "清晰", words: 9000 });
+
+    expect(tooSmall.messages[1].content).toContain("目标字数：200");
+    expect(tooSmall.max_tokens).toBe(1024);
+    expect(tooLarge.messages[1].content).toContain("目标字数：8000");
+    expect(tooLarge.max_tokens).toBe(24000);
+  });
+
   it("generates a local content-only draft when no provider is configured", () => {
     const article = generateDraftLocally("早起习惯", "清晰实用");
 
@@ -42,18 +48,9 @@ describe("aiWriting", () => {
     );
   });
 
-  it("rewrites selected text with deterministic local modes", () => {
-    expect(rewriteSelectionLocally("这件事很重要", "扩写")).toContain("更具体地说");
-    expect(rewriteSelectionLocally("这件事很重要，真的特别特别重要", "精简")).toBe("这件事很重要");
-    expect(rewriteSelectionLocally("这件事很重要", "润色")).toContain("值得认真对待");
-  });
-
-  it("creates title and digest candidates from content", () => {
-    const titles = suggestTitles("早起习惯", "先把目标降下来，然后减少早晨阻力。");
+  it("creates a digest from content", () => {
     const digest = createDigest("先把目标降下来，然后减少早晨阻力。每天提前十五分钟就够了。");
 
-    expect(titles).toHaveLength(4);
-    expect(titles[0]).toContain("早起习惯");
     expect(digest.length).toBeLessThanOrEqual(64);
   });
 
@@ -93,14 +90,10 @@ describe("aiWriting", () => {
     expect(restored.blocks.map((block) => block.type)).toEqual(["title", "paragraph", "image", "imageGrid"]);
   });
 
-  it("builds smart format, rewrite, and title requests from markdown content", () => {
+  it("builds smart format requests from markdown content", () => {
     const format = buildSmartFormatRequest("# 标题\n\n正文");
-    const rewrite = buildRewriteRequest("润色", "# 标题\n\n正文");
-    const title = buildTitleRequest("# 旧标题\n\n正文");
 
     expect(format.messages[1].content).toContain("结构化排版润色");
-    expect(rewrite.messages[1].content).toContain("润色");
-    expect(title.messages[1].content).toContain("起 4 个标题");
     expect(format.response_format).toBeUndefined();
   });
 });

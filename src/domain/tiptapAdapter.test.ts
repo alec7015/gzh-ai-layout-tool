@@ -73,4 +73,48 @@ describe("tiptapAdapter", () => {
 
     expect(JSON.stringify(doc)).not.toContain('"text":""');
   });
+
+  it("preserves block ids, block styles, and rich text attrs across round trips", () => {
+    const article: ArticleAst = {
+      meta: { title: "样式保留" },
+      blocks: [
+        { id: "title-keep", type: "title", text: "样式保留", style: { "text-align": "center" } },
+        {
+          id: "p-keep",
+          type: "paragraph",
+          runs: [
+            {
+              text: "彩色重点",
+              marks: ["bold", "underline", "strike"],
+              attrs: { color: "#dc2626", background: "#fef3c7", fontSize: "18px" },
+            },
+          ],
+          style: { background: "#fff7ed", "text-align": "center" },
+        },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1].attrs).toMatchObject({
+      blockId: "p-keep",
+      blockStyle: { background: "#fff7ed", "text-align": "center" },
+      textAlign: "center",
+    });
+    expect(restored.blocks[1]).toMatchObject({
+      id: "p-keep",
+      style: { background: "#fff7ed", "text-align": "center" },
+    });
+    expect(restored.blocks[1]).toMatchObject({
+      type: "paragraph",
+      runs: [
+        {
+          text: "彩色重点",
+          marks: ["bold", "underline", "strike"],
+          attrs: { color: "#dc2626", background: "#fef3c7", fontSize: "18px" },
+        },
+      ],
+    });
+  });
 });

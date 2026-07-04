@@ -2,7 +2,7 @@ import type { ArticleAst } from "./types";
 import { createSampleArticle } from "./draftStore";
 
 const DRAFT_LIBRARY_KEY = "gzh-draft-library";
-const MAX_VERSIONS = 12;
+const MAX_VERSIONS = 20;
 
 export interface DraftLibraryStorage {
   getItem(key: string): string | null;
@@ -21,6 +21,7 @@ export interface DraftRecord {
   title: string;
   updatedAt: string;
   article: ArticleAst;
+  layoutArticle: ArticleAst | null;
   versions: DraftVersion[];
 }
 
@@ -52,7 +53,14 @@ export function loadDraftLibrary(storage: DraftLibraryStorage | undefined): Draf
     if (!parsed.drafts?.length || !parsed.currentDraftId) {
       return createDraftLibrary();
     }
-    return parsed;
+    return {
+      ...parsed,
+      drafts: parsed.drafts.map((draft) => ({
+        ...draft,
+        layoutArticle: draft.layoutArticle ?? null,
+        versions: draft.versions ?? [],
+      })),
+    };
   } catch {
     return createDraftLibrary();
   }
@@ -126,11 +134,34 @@ export function updateCurrentDraftArticle(
   };
 }
 
+export function updateCurrentDraftLayoutArticle(
+  library: DraftLibrary,
+  layoutArticle: ArticleAst | null
+): DraftLibrary {
+  return {
+    ...library,
+    drafts: library.drafts.map((draft) =>
+      draft.id === library.currentDraftId
+        ? {
+            ...draft,
+            updatedAt: new Date().toISOString(),
+            layoutArticle,
+          }
+        : draft
+    ),
+  };
+}
+
 export function createVersionSnapshot(
   library: DraftLibrary,
   reason: string
 ): DraftLibrary {
   const current = getCurrentDraft(library);
+  const latestVersion = current.versions[0];
+  if (latestVersion && JSON.stringify(latestVersion.article) === JSON.stringify(current.article)) {
+    return library;
+  }
+
   const version: DraftVersion = {
     id: createId("version"),
     reason,
@@ -143,6 +174,22 @@ export function createVersionSnapshot(
     drafts: library.drafts.map((draft) =>
       draft.id === current.id
         ? { ...draft, versions: [version, ...draft.versions].slice(0, MAX_VERSIONS) }
+        : draft
+    ),
+  };
+}
+
+export function deleteVersion(library: DraftLibrary, versionId: string): DraftLibrary {
+  const current = getCurrentDraft(library);
+  if (!current.versions.some((version) => version.id === versionId)) {
+    return library;
+  }
+
+  return {
+    ...library,
+    drafts: library.drafts.map((draft) =>
+      draft.id === current.id
+        ? { ...draft, versions: draft.versions.filter((version) => version.id !== versionId) }
         : draft
     ),
   };
@@ -165,6 +212,7 @@ function createDraftRecord(article: ArticleAst): DraftRecord {
     title: article.meta.title || "未命名草稿",
     updatedAt: new Date().toISOString(),
     article,
+    layoutArticle: null,
     versions: [],
   };
 }

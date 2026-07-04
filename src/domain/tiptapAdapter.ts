@@ -1,11 +1,11 @@
-import type { ArticleAst, ArticleBlock, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
+import type { ArticleAst, ArticleBlock, BlockOverride, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
 
 export type TiptapNode = {
   type: string;
   attrs?: Record<string, unknown>;
   content?: TiptapNode[];
   text?: string;
-  marks?: Array<{ type: string }>;
+  marks?: Array<{ type: string; attrs?: Record<string, unknown> }>;
 };
 
 export interface TiptapDoc {
@@ -40,21 +40,24 @@ export function tiptapDocToPlainText(doc: TiptapDoc): string {
 
 function blockToNode(block: ArticleBlock): TiptapNode {
   if (block.type === "title") {
-    return headingNode(block.text, 1);
+    return headingNode(block.text, 1, block);
   }
 
   if (block.type === "heading") {
-    return headingNode(block.text, 2);
+    return headingNode(block.text, 2, block);
   }
 
   if (block.type === "paragraph") {
     const content = runsToNodes(block.runs);
-    return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
+    return content.length > 0
+      ? { type: "paragraph", attrs: blockAttrs(block), content }
+      : { type: "paragraph", attrs: blockAttrs(block) };
   }
 
   if (block.type === "quote") {
     return {
       type: "blockquote",
+      attrs: blockAttrs(block),
       content: [{ type: "paragraph", content: [{ type: "text", text: block.text }] }],
     };
   }
@@ -62,6 +65,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   if (block.type === "list") {
     return {
       type: block.ordered ? "orderedList" : "bulletList",
+      attrs: blockAttrs(block),
       content: block.items.map((item) => ({
         type: "listItem",
         content: [{ type: "paragraph", content: [{ type: "text", text: item }] }],
@@ -72,6 +76,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   if (block.type === "image") {
     return {
       type: "paragraph",
+      attrs: blockAttrs(block),
       content: [{ type: "text", text: `![${block.caption ?? "配图"}](${block.src})` }],
     };
   }
@@ -80,6 +85,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
     return {
       type: "imageGrid",
       attrs: {
+        ...blockAttrs(block),
         images: block.images,
         layout: block.layout,
         gap: block.gap,
@@ -91,6 +97,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   if (block.type === "table") {
     return {
       type: "table",
+      attrs: blockAttrs(block),
       content: block.rows.map((row) => ({
         type: "tableRow",
         content: row.cells.map((cell) => ({
@@ -101,17 +108,17 @@ function blockToNode(block: ArticleBlock): TiptapNode {
     };
   }
 
-  return { type: "horizontalRule" };
+  return { type: "horizontalRule", attrs: blockAttrs(block) };
 }
 
 function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
   if (node.type === "heading") {
     const text = inlineText(node).trim();
     return {
-      id: createBlockId(node.attrs?.level === 1 ? "title" : "heading", index),
+      id: blockIdFromNode(node, node.attrs?.level === 1 ? "title" : "heading", index),
       type: node.attrs?.level === 1 ? "title" : "heading",
       text,
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
@@ -120,72 +127,73 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
     const image = text.match(/^!\[(.*)]\((.+)\)$/);
     if (image) {
       return {
-        id: createBlockId("image", index),
+        id: blockIdFromNode(node, "image", index),
         type: "image",
         src: image[2],
         caption: image[1] || "配图",
-        style: {},
+        style: styleFromNode(node),
       };
     }
 
     return {
-      id: createBlockId("paragraph", index),
+      id: blockIdFromNode(node, "paragraph", index),
       type: "paragraph",
       runs: inlineRuns(node),
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
   if (node.type === "blockquote") {
     return {
-      id: createBlockId("quote", index),
+      id: blockIdFromNode(node, "quote", index),
       type: "quote",
       text: inlineText(node).trim(),
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
   if (node.type === "bulletList" || node.type === "orderedList") {
     return {
-      id: createBlockId("list", index),
+      id: blockIdFromNode(node, "list", index),
       type: "list",
       ordered: node.type === "orderedList",
       items: (node.content ?? []).map((item) => inlineText(item).trim()).filter(Boolean),
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
   if (node.type === "imageGrid") {
     const attrs = node.attrs ?? {};
     return {
-      id: createBlockId("image-grid", index),
+      id: blockIdFromNode(node, "image-grid", index),
       type: "imageGrid",
       images: Array.isArray(attrs.images) ? (attrs.images as GridImage[]) : [],
       layout: isGridLayout(attrs.layout) ? attrs.layout : "two",
       gap: Number(attrs.gap ?? 6),
       radius: Number(attrs.radius ?? 8),
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
   if (node.type === "table") {
     return {
-      id: createBlockId("table", index),
+      id: blockIdFromNode(node, "table", index),
       type: "table",
       rows: tableRowsFromNode(node),
-      style: {},
+      style: styleFromNode(node),
     };
   }
 
   if (node.type === "horizontalRule") {
-    return { id: createBlockId("divider", index), type: "divider", style: {} };
+    return { id: blockIdFromNode(node, "divider", index), type: "divider", style: styleFromNode(node) };
   }
 
   return null;
 }
 
-function headingNode(text: string, level: number): TiptapNode {
-  return text ? { type: "heading", attrs: { level }, content: [{ type: "text", text }] } : { type: "heading", attrs: { level } };
+function headingNode(text: string, level: number, block: ArticleBlock): TiptapNode {
+  const attrs = { level, ...blockAttrs(block) };
+  return text ? { type: "heading", attrs, content: [{ type: "text", text }] } : { type: "heading", attrs };
 }
 
 function runsToNodes(runs: TextRun[]): TiptapNode[] {
@@ -194,8 +202,36 @@ function runsToNodes(runs: TextRun[]): TiptapNode[] {
     .map((run) => ({
       type: "text",
       text: run.text,
-      marks: run.marks?.map((mark) => ({ type: mark === "bold" ? "bold" : "italic" })),
+      marks: runMarksToTiptap(run),
     }));
+}
+
+function runMarksToTiptap(run: TextRun): TiptapNode["marks"] {
+  const marks: NonNullable<TiptapNode["marks"]> = (run.marks ?? []).map((mark) => {
+    if (mark === "bold") {
+      return { type: "bold" };
+    }
+    if (mark === "underline") {
+      return { type: "underline" };
+    }
+    if (mark === "strike") {
+      return { type: "strike" };
+    }
+    return { type: "italic" };
+  });
+
+  if (run.attrs) {
+    marks.push({
+      type: "textStyle",
+      attrs: {
+        color: run.attrs.color,
+        backgroundColor: run.attrs.background,
+        fontSize: run.attrs.fontSize,
+      },
+    });
+  }
+
+  return marks.length ? marks : undefined;
 }
 
 function tableRowsFromNode(node: TiptapNode): TableRow[] {
@@ -259,8 +295,22 @@ function collectRuns(node: TiptapNode, runs: TextRun[]): void {
   if (node.text !== undefined) {
     const marks = node.marks
       ?.map((mark) => mark.type)
-      .filter((mark): mark is TextMark => mark === "bold" || mark === "italic");
-    runs.push({ text: node.text, marks: marks?.length ? marks : undefined });
+      .map((mark) => (mark === "strike" ? "strike" : mark))
+      .filter(
+        (mark): mark is TextMark =>
+          mark === "bold" || mark === "italic" || mark === "underline" || mark === "strike"
+      );
+    const textStyle = node.marks?.find((mark) => mark.type === "textStyle")?.attrs ?? {};
+    const attrs = {
+      color: typeof textStyle.color === "string" ? textStyle.color : undefined,
+      background: typeof textStyle.backgroundColor === "string" ? textStyle.backgroundColor : undefined,
+      fontSize: typeof textStyle.fontSize === "string" ? textStyle.fontSize : undefined,
+    };
+    runs.push({
+      text: node.text,
+      marks: marks?.length ? marks : undefined,
+      attrs: Object.values(attrs).some(Boolean) ? attrs : undefined,
+    });
     return;
   }
 
@@ -281,6 +331,44 @@ function tableToMarkdown(rows: TableRow[]): string {
 
 function createBlockId(type: string, index: number): string {
   return `${type}-${index + 1}`;
+}
+
+function blockAttrs(block: ArticleBlock): Record<string, unknown> {
+  const style = block.style ?? {};
+  const attrs: Record<string, unknown> = { blockId: block.id };
+  if (Object.keys(style).length > 0) {
+    attrs.blockStyle = style;
+  }
+  if (typeof style["text-align"] === "string") {
+    attrs.textAlign = style["text-align"];
+  }
+  return attrs;
+}
+
+function blockIdFromNode(node: TiptapNode, type: string, index: number): string {
+  return typeof node.attrs?.blockId === "string" ? node.attrs.blockId : createBlockId(type, index);
+}
+
+function styleFromNode(node: TiptapNode): BlockOverride {
+  const style = isBlockOverride(node.attrs?.blockStyle) ? { ...node.attrs.blockStyle } : {};
+  if (typeof node.attrs?.textAlign === "string") {
+    style["text-align"] = node.attrs.textAlign;
+  }
+  return style;
+}
+
+function isBlockOverride(value: unknown): value is BlockOverride {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.values(value).every(
+    (item) =>
+      typeof item === "string" ||
+      typeof item === "number" ||
+      typeof item === "boolean" ||
+      item === null
+  );
 }
 
 function isGridLayout(value: unknown): value is GridLayout {

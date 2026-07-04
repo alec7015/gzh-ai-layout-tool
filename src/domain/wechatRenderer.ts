@@ -337,30 +337,9 @@ function renderHeaderDecoration(preset: StylePreset): string {
 }
 
 function renderFooterDecoration(preset: StylePreset): string {
-  if (!preset.decorations.footer) {
+  const footerText = preset.decorations.footerText?.trim();
+  if (!preset.decorations.footer || !footerText) {
     return "";
-  }
-
-  if (preset.decorations.footer === "summary-card") {
-    return `<section style="${style({
-      margin: `${preset.rhythm.sectionGap} 0 0`,
-      padding: "14px 16px",
-      background: preset.palette.secondary,
-      color: preset.palette.textSub,
-      "font-size": "13px",
-      "line-height": "1.7",
-      "border-radius": "6px",
-    })}">小结：以上内容可作为后续行动的参考，建议收藏后慢慢看。</section>`;
-  }
-
-  if (preset.decorations.footer === "source-note" || preset.decorations.footer === "classic-note") {
-    return `<section style="${style({
-      margin: `${preset.rhythm.sectionGap} 0 0`,
-      color: preset.palette.textSub,
-      "font-size": "12px",
-      "line-height": "1.7",
-      "text-align": "center",
-    })}">感谢阅读，愿这篇文章对你有一点帮助。</section>`;
   }
 
   return `<section style="${style({
@@ -372,31 +351,63 @@ function renderFooterDecoration(preset: StylePreset): string {
     "line-height": "1.7",
     "text-align": "center",
     "border-radius": "8px",
-  })}"><strong style="${style({ color: preset.palette.primary, "font-weight": "700" })}">感谢阅读</strong><br />如果觉得有用，欢迎关注和分享。</section>`;
+  })}">${escapeHtml(footerText)}</section>`;
 }
 
 function renderRun(run: TextRun, preset: StylePreset): string {
-  const text = escapeHtml(run.text);
+  let content = escapeHtml(run.text);
 
-  if (!run.marks?.length) {
-    return text;
+  if (run.attrs) {
+    const attrsStyle: Record<string, string> = {};
+    if (run.attrs.color) {
+      attrsStyle.color = run.attrs.color;
+    }
+    if (run.attrs.background) {
+      attrsStyle["background-color"] = run.attrs.background;
+    }
+    if (run.attrs.fontSize) {
+      attrsStyle["font-size"] = run.attrs.fontSize;
+    }
+    if (Object.keys(attrsStyle).length > 0) {
+      content = `<span style="${style(attrsStyle)}">${content}</span>`;
+    }
   }
 
-  return run.marks.reduce((content, mark) => {
+  if (!run.marks?.length) {
+    return content;
+  }
+
+  return run.marks.reduce((inner, mark) => {
     if (mark === "bold") {
-      return `<strong style="${style({ color: preset.palette.textMain, "font-weight": "700" })}">${content}</strong>`;
+      const markStyle: Record<string, string> = { "font-weight": "700" };
+      if (!run.attrs?.color) {
+        markStyle.color = preset.palette.textMain;
+      }
+      return `<strong style="${style(markStyle)}">${inner}</strong>`;
     }
 
     if (mark === "italic") {
-      return `<em style="${style({ color: preset.palette.textSub })}">${content}</em>`;
+      const markStyle: Record<string, string> = {};
+      if (!run.attrs?.color) {
+        markStyle.color = preset.palette.textSub;
+      }
+      return `<em style="${style(markStyle)}">${inner}</em>`;
+    }
+
+    if (mark === "underline") {
+      return `<span style="${style({ "text-decoration": "underline" })}">${inner}</span>`;
+    }
+
+    if (mark === "strike") {
+      return `<span style="${style({ "text-decoration": "line-through" })}">${inner}</span>`;
     }
 
     return `<span style="${style({
-      color: preset.palette.textMain,
-      background: preset.palette.secondary,
+      ...(run.attrs?.color ? {} : { color: preset.palette.textMain }),
+      ...(run.attrs?.background ? {} : { background: preset.palette.secondary }),
       padding: "0 3px",
-    })}">${content}</span>`;
-  }, text);
+    })}">${inner}</span>`;
+  }, content);
 }
 
 function paragraphStyle(preset: StylePreset, block: ArticleBlock): string {

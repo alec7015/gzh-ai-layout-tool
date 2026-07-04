@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Slice, Fragment } from "@tiptap/pm/model";
+import { BlockMeta } from "./BlockMetaExtension";
 import { ImageGrid } from "./ImageGridExtension";
 import { htmlToCleanArticle } from "../domain/magicPaste";
 import {
@@ -19,6 +20,7 @@ interface WriterEditorProps {
   onInsertImageFiles(files: FileList | File[]): void;
   isSupportedImageFile(file: File): boolean;
   onCopyToLayout?: () => void;
+  readOnly?: boolean;
 }
 
 export default function WriterEditor({
@@ -28,6 +30,7 @@ export default function WriterEditor({
   onInsertImageFiles,
   isSupportedImageFile,
   onCopyToLayout,
+  readOnly = false,
 }: WriterEditorProps) {
   const articleRef = useRef(article);
   const editor = useEditor(
@@ -39,6 +42,7 @@ export default function WriterEditor({
         TableHeader,
         TableCell,
         ImageGrid,
+        BlockMeta,
       ],
       content: astToTiptapDoc(article),
       editorProps: {
@@ -84,12 +88,24 @@ export default function WriterEditor({
     editor.commands.setContent(astToTiptapDoc(article), { emitUpdate: false });
   }, [article, editor, externalVersion]);
 
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) {
+      return;
+    }
+
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
   function insertImageGrid() {
     if (!editor || editor.isDestroyed) {
       return;
     }
 
     editor.chain().focus().insertImageGrid({ layout: "two" }).run();
+  }
+
+  function insertTable() {
+    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }
 
   return (
@@ -109,6 +125,24 @@ export default function WriterEditor({
       }}
     >
       <div className="editor-toolbar">
+        <button type="button" title="小标题" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+          小标题
+        </button>
+        <button type="button" title="引用/金句" onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
+          引用
+        </button>
+        <button type="button" title="无序列表" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+          列表
+        </button>
+        <button type="button" title="有序列表" onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+          编号
+        </button>
+        <button type="button" title="分隔线" onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+          分隔线
+        </button>
+        <button type="button" title="表格" onClick={insertTable}>
+          表格
+        </button>
         <button type="button" onClick={insertImageGrid}>
           插入多图
         </button>

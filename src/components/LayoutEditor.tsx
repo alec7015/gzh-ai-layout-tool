@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import type { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
@@ -7,6 +8,7 @@ import { BackgroundColor, Color, FontSize, TextStyle } from "@tiptap/extension-t
 import { Bold, Italic, Redo2, Settings, Strikethrough, Underline, Undo2 } from "lucide-react";
 import { BlockMeta } from "./BlockMetaExtension";
 import { ImageGrid } from "./ImageGridExtension";
+import { TableTools } from "./TableTools";
 import { astToTiptapDoc, tiptapDocToAst, type TiptapDoc } from "../domain/tiptapAdapter";
 import { presetToEditorCss } from "../domain/presetToEditorCss";
 import type { ArticleAst, StylePreset } from "../domain/types";
@@ -29,6 +31,41 @@ interface LayoutEditorProps {
 
 const colorSwatches = ["#171717", "#dc2626", "#d97706", "#0f766e", "#2563eb", "#7c3aed"];
 const backgroundSwatches = ["#ffffff", "#fef3c7", "#ecfdf5", "#eff6ff", "#f5f3ff", "#f4f4f5"];
+const fontSizeOptions = ["14px", "15px", "16px", "17px", "18px", "20px"];
+const lineHeightOptions = ["1.5", "1.75", "2", "2.25"];
+
+function clampNumber(value: string, min: number, max: number, fallback: number) {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(Math.max(parsed, min), max);
+}
+
+function findCurrentBlock(editor: Editor | null) {
+  if (!editor) {
+    return null;
+  }
+
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (typeof node.attrs.blockId === "string") {
+      return { node, pos: $from.before(depth) };
+    }
+  }
+  return null;
+}
+
+function getBlockStyleValue(editor: Editor | null, key: string) {
+  const block = findCurrentBlock(editor);
+  const style = block?.node.attrs.blockStyle;
+  if (!style || typeof style !== "object") {
+    return "";
+  }
+  const value = (style as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
 
 export default function LayoutEditor({
   article,
@@ -41,8 +78,11 @@ export default function LayoutEditor({
   onSettingsChange,
 }: LayoutEditorProps) {
   const articleRef = useRef(article);
+  const settingsRef = useRef<HTMLDivElement | null>(null);
   const [, forceUpdate] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [customFontSizeOpen, setCustomFontSizeOpen] = useState(false);
+  const [customLineHeightOpen, setCustomLineHeightOpen] = useState(false);
   const editor = useEditor(
     {
       extensions: [
@@ -97,37 +137,61 @@ export default function LayoutEditor({
     editor.commands.setContent(astToTiptapDoc(article), { emitUpdate: false });
   }, [editor, externalVersion]);
 
-  function setBlockStyleAttr(key: string, value: string | null) {
-    if (!editor) {
+  useEffect(() => {
+    if (!settingsOpen) {
       return;
     }
 
-    const { $from } = editor.state.selection;
-    for (let depth = $from.depth; depth > 0; depth -= 1) {
-      const node = $from.node(depth);
-      if (typeof node.attrs.blockId === "string") {
-        const pos = $from.before(depth);
-        const nextStyle = {
-          ...((node.attrs.blockStyle && typeof node.attrs.blockStyle === "object") ? node.attrs.blockStyle : {}),
-        };
-        if (value === null || value === "") {
-          delete nextStyle[key];
-        } else {
-          nextStyle[key] = value;
-        }
-        editor.view.dispatch(
-          editor.state.tr.setNodeAttribute(
-            pos,
-            "blockStyle",
-            Object.keys(nextStyle).length > 0 ? nextStyle : null
-          )
-        );
-        return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!settingsRef.current?.contains(event.target as Node)) {
+        setSettingsOpen(false);
       }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSettingsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [settingsOpen]);
+
+  function setBlockStyleAttr(key: string, value: string | null) {
+    const block = findCurrentBlock(editor);
+    if (!editor || !block) {
+      return;
     }
+
+    const nextStyle = {
+      ...((block.node.attrs.blockStyle && typeof block.node.attrs.blockStyle === "object") ? block.node.attrs.blockStyle : {}),
+    };
+    if (value === null || value === "") {
+      delete nextStyle[key];
+    } else {
+      nextStyle[key] = value;
+    }
+    editor.view.dispatch(
+      editor.state.tr.setNodeAttribute(
+        block.pos,
+        "blockStyle",
+        Object.keys(nextStyle).length > 0 ? nextStyle : null
+      )
+    );
   }
 
-  const fontSize = editor?.getAttributes("textStyle").fontSize ?? "";
+  const fontSizeAttr = editor?.getAttributes("textStyle").fontSize;
+  const fontSize = typeof fontSizeAttr === "string" ? fontSizeAttr : "";
+  const fontSizeSelect = fontSize === "" || fontSizeOptions.includes(fontSize) ? fontSize : "custom";
+  const lineHeight = getBlockStyleValue(editor ?? null, "line-height");
+  const lineHeightSelect = lineHeight === "" || lineHeightOptions.includes(lineHeight) ? lineHeight : "custom";
+  const displayedFontSizeSelect = customFontSizeOpen ? "custom" : fontSizeSelect;
+  const displayedLineHeightSelect = customLineHeightOpen ? "custom" : lineHeightSelect;
+  const isLeftAligned = !editor?.isActive({ textAlign: "center" }) && !editor?.isActive({ textAlign: "right" });
 
   return (
     <div className="layout-editor">
@@ -180,24 +244,75 @@ export default function LayoutEditor({
             <Strikethrough size={16} />
           </button>
         </div>
-        <select aria-label="字号" value={fontSize} onChange={(event) => editor?.chain().focus().setFontSize(event.target.value).run()}>
+        <select
+          aria-label="字号"
+          value={displayedFontSizeSelect}
+          onChange={(event) => {
+            const value = event.target.value;
+            if (value === "") {
+              setCustomFontSizeOpen(false);
+              editor?.chain().focus().unsetFontSize().run();
+            } else if (value === "custom") {
+              setCustomFontSizeOpen(true);
+              editor?.chain().focus().setFontSize(fontSize || "18px").run();
+            } else {
+              setCustomFontSizeOpen(false);
+              editor?.chain().focus().setFontSize(value).run();
+            }
+          }}
+        >
           <option value="">字号</option>
-          <option value="" disabled>
-            字号
-          </option>
-          {["14px", "15px", "16px", "17px", "18px", "20px"].map((size) => (
+          {fontSizeOptions.map((size) => (
             <option key={size} value={size}>
               {size}
             </option>
           ))}
+          <option value="custom">自定义</option>
         </select>
-        <select aria-label="行间距" onChange={(event) => setBlockStyleAttr("line-height", event.target.value || null)} defaultValue="">
+        {displayedFontSizeSelect === "custom" ? (
+          <input
+            aria-label="自定义字号"
+            className="ribbon-number"
+            max={40}
+            min={10}
+            step={1}
+            type="number"
+            value={Number.parseInt(fontSize, 10) || 18}
+            onChange={(event) => {
+              const nextSize = clampNumber(event.target.value, 10, 40, 18);
+              editor?.chain().focus().setFontSize(`${Math.round(nextSize)}px`).run();
+            }}
+          />
+        ) : null}
+        <select
+          aria-label="行间距"
+          value={displayedLineHeightSelect}
+          onChange={(event) => {
+            const value = event.target.value;
+            setCustomLineHeightOpen(value === "custom");
+            setBlockStyleAttr("line-height", value === "custom" ? lineHeight || "1.9" : value || null);
+          }}
+        >
           <option value="">行距</option>
-          <option value="1.5">1.5</option>
-          <option value="1.75">1.75</option>
-          <option value="2">2.0</option>
-          <option value="2.25">2.25</option>
+          {lineHeightOptions.map((height) => (
+            <option key={height} value={height}>
+              {height === "2" ? "2.0" : height}
+            </option>
+          ))}
+          <option value="custom">自定义</option>
         </select>
+        {displayedLineHeightSelect === "custom" ? (
+          <input
+            aria-label="自定义行距"
+            className="ribbon-number"
+            max={3}
+            min={1}
+            step={0.05}
+            type="number"
+            value={Number.parseFloat(lineHeight) || 1.9}
+            onChange={(event) => setBlockStyleAttr("line-height", String(clampNumber(event.target.value, 1, 3, 1.9)))}
+          />
+        ) : null}
         <div className="toolbar-swatches" aria-label="文字色">
           {colorSwatches.map((color) => (
             <button
@@ -220,13 +335,13 @@ export default function LayoutEditor({
             />
           ))}
         </div>
-        <button type="button" onClick={() => editor?.chain().focus().setTextAlign("left").run()}>
+        <button className={isLeftAligned ? "active" : ""} type="button" onClick={() => editor?.chain().focus().setTextAlign("left").run()}>
           左
         </button>
-        <button type="button" onClick={() => editor?.chain().focus().setTextAlign("center").run()}>
+        <button className={editor?.isActive({ textAlign: "center" }) ? "active" : ""} type="button" onClick={() => editor?.chain().focus().setTextAlign("center").run()}>
           中
         </button>
-        <button type="button" onClick={() => editor?.chain().focus().setTextAlign("right").run()}>
+        <button className={editor?.isActive({ textAlign: "right" }) ? "active" : ""} type="button" onClick={() => editor?.chain().focus().setTextAlign("right").run()}>
           右
         </button>
         <input aria-label="块背景色" title="块背景色" type="color" onChange={(event) => setBlockStyleAttr("background", event.target.value)} />
@@ -239,8 +354,9 @@ export default function LayoutEditor({
         }}>
           清块样式
         </button>
+        <TableTools editor={editor} />
         <span className="ribbon-spacer" />
-        <div className="layout-settings-wrap">
+        <div className="layout-settings-wrap" ref={settingsRef}>
           <button type="button" onClick={() => setSettingsOpen((value) => !value)}>
             <Settings size={16} />
             版式设置

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   Check,
   Clipboard,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { EditorBoundary } from "./components/EditorBoundary";
 import { SettingsModal } from "./components/SettingsModal";
+import { useColumnResize } from "./hooks/useColumnResize";
 import { recommendLayout } from "./domain/aiLayout";
 import { callChatCompletionsJson, callChatCompletionsText } from "./domain/aiClient";
 import { buildLayoutRequest, coerceLayoutRecommendation } from "./domain/aiLayoutSchema";
@@ -72,6 +73,9 @@ type LayoutAiStatus =
 const storage = typeof window === "undefined" ? undefined : window.localStorage;
 const WriterEditor = lazy(() => import("./components/WriterEditor"));
 const LayoutEditor = lazy(() => import("./components/LayoutEditor"));
+const previewDefaultWidth = 390;
+const previewMinWidth = 300;
+const canvasMinWidth = 744;
 
 export default function App() {
   const [workspace, setWorkspace] = useState<Workspace>("layout");
@@ -106,6 +110,22 @@ export default function App() {
   );
   const [busy, setBusy] = useState<BusyState>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const layoutScreenRef = useRef<HTMLElement | null>(null);
+  const getMaxPreviewWidth = useCallback(() => {
+    const totalWidth = Math.max(
+      layoutScreenRef.current?.clientWidth ?? 0,
+      typeof window === "undefined" ? 0 : window.innerWidth,
+      1440
+    );
+    return totalWidth - 252 - 6 - canvasMinWidth - 16 * 3;
+  }, []);
+  const { width: previewWidth, handleProps: previewResizeHandleProps } = useColumnResize({
+    defaultWidth: previewDefaultWidth,
+    minWidth: previewMinWidth,
+    storage,
+    storageKey: "gzh-preview-width",
+    getMaxWidth: getMaxPreviewWidth,
+  });
 
   const allStylePresets = useMemo(() => [...stylePresets, ...customStyles], [customStyles]);
   const currentDraft = useMemo(() => getCurrentDraft(draftLibrary), [draftLibrary]);
@@ -717,7 +737,11 @@ export default function App() {
           </aside>
         </main>
       ) : (
-        <main className="layout-screen">
+        <main
+          className="layout-screen"
+          ref={layoutScreenRef}
+          style={{ "--preview-w": `${previewWidth}px` } as CSSProperties}
+        >
           <aside className="style-library">
             <div className="section-title">
               <Palette size={16} />
@@ -795,6 +819,8 @@ export default function App() {
               </section>
             )}
           </section>
+
+          <div className="split-handle" aria-label="调整预览宽度" {...previewResizeHandleProps} />
 
           <aside className="preview-panel">
             <div className="phone-header">

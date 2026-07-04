@@ -190,10 +190,30 @@ button:disabled {
 
 .layout-screen {
   display: grid;
-  grid-template-columns: 252px minmax(500px, 1fr) 390px;
+  grid-template-columns: 252px minmax(0, 1fr) 6px var(--preview-w, 390px);
   gap: 16px;
   height: calc(100vh - 100px);
   padding: 16px;
+}
+
+.split-handle {
+  align-self: stretch;
+  width: 6px;
+  cursor: col-resize;
+  border-radius: 999px;
+  background: linear-gradient(180deg, transparent, #d8e2ea 18%, #d8e2ea 82%, transparent);
+  outline: 0;
+}
+
+.split-handle:hover,
+.split-handle:focus-visible,
+body.is-col-resizing .split-handle {
+  background: linear-gradient(180deg, transparent, #1f7a5f 18%, #1f7a5f 82%, transparent);
+}
+
+body.is-col-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .style-library,
@@ -455,13 +475,19 @@ button:disabled {
 
 .layout-editor-toolbar button,
 .layout-editor-toolbar select,
-.layout-editor-toolbar input[type="color"] {
+.layout-editor-toolbar input[type="color"],
+.layout-editor-toolbar .ribbon-number {
   min-height: 30px;
   border: 1px solid #dfe5ea;
   border-radius: 7px;
   background: #ffffff;
   color: #25313d;
   font-size: 12px;
+}
+
+.layout-editor-toolbar .ribbon-number {
+  width: 58px;
+  padding: 0 6px;
 }
 
 .layout-editor-toolbar button {
@@ -1097,7 +1123,11 @@ button:disabled {
 
 @media (max-width: 1240px) {
   .layout-screen {
-    grid-template-columns: 224px minmax(440px, 1fr) 390px;
+    grid-template-columns: 224px minmax(440px, 1fr) 0 minmax(300px, 340px);
+  }
+
+  .split-handle {
+    display: none;
   }
 
   .device-frame.phone {
@@ -1259,6 +1289,10 @@ button:disabled {
   .settings-backdrop {
     align-items: stretch;
     padding: 12px;
+  }
+
+  .split-handle {
+    display: none;
   }
 
   .provider-grid {

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import App from "./App";
@@ -84,5 +84,47 @@ describe("App", () => {
     expect(screen.queryByText("微调面板")).not.toBeInTheDocument();
     expect(screen.getByText("尚未运行")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制到公众号" })).not.toBeDisabled();
+  });
+
+  it("supports keyboard resizing for the layout preview column", () => {
+    window.localStorage.setItem("gzh-preview-width", "350");
+    const { container } = render(<App />);
+
+    const handle = screen.getByRole("separator", { name: "调整预览宽度" });
+    const layoutScreen = container.querySelector(".layout-screen") as HTMLElement;
+
+    expect(layoutScreen.style.getPropertyValue("--preview-w")).toBe("350px");
+
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(layoutScreen.style.getPropertyValue("--preview-w")).toBe("366px");
+
+    fireEvent.keyDown(handle, { key: "End" });
+    expect(Number.parseInt(layoutScreen.style.getPropertyValue("--preview-w"), 10)).toBeGreaterThanOrEqual(390);
+  });
+
+  it("resizes the right preview column in the same direction as pointer dragging", () => {
+    const { container } = render(<App />);
+
+    const handle = screen.getByRole("separator", { name: "调整预览宽度" });
+    const layoutScreen = container.querySelector(".layout-screen") as HTMLElement;
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 500 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 532 });
+
+    expect(layoutScreen.style.getPropertyValue("--preview-w")).toBe("358px");
+  });
+
+  it("shows controlled custom line-height and font-size controls in layout editor", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: "写作台" }));
+    await userEvent.click(screen.getAllByRole("button", { name: "复制到排版台" })[0]);
+    expect(await screen.findByLabelText("排版工具栏")).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText("行间距"), "custom");
+    expect(screen.getByLabelText("自定义行距")).toHaveValue(1.9);
+
+    await userEvent.selectOptions(screen.getByLabelText("字号"), "custom");
+    expect(screen.getByLabelText("自定义字号")).toHaveValue(18);
   });
 });

@@ -53,12 +53,13 @@ npm run tauri:build
 
 ## 第一版已实现
 
-- 写作台：Tiptap 块编辑、主题/风格本地生成、润色/扩写/精简/起标题、本地 AI 接口设置保存。
+- 写作台：Tiptap 块编辑、魔法粘贴富文本净化、多图版式、主题/风格本地生成、润色/扩写/精简/起标题、本地 AI 接口设置保存。
 - 排版台：8 套版式、AI 规则推荐、主题色/字号/段距微调、块级颜色/背景/对齐 override。
-- 渲染：AST + Style Preset 生成微信兼容内联 HTML，预览与复制共用同一份输出。
-- 复制：优先 `text/html` Clipboard API，失败时自动退回 `execCommand`。
+- 预览：手机 / 平板 / 桌面三档设备框，明暗预览复用同一份渲染结果。
+- 渲染：AST + Style Preset 生成微信兼容内联 HTML，支持列表、表格、单图和多图。
+- 复制：复制前重塑列表/表格、外链图转 Base64，优先 `text/html` Clipboard API，失败时自动退回 `execCommand`。
 - 本地保存：草稿列表、版本历史、AI 设置、自定义版式保存到浏览器/Tauri WebView `localStorage`。
-- 图片：写作区支持 Markdown 图片块、拖拽/粘贴图片转 data URL。
+- 图片：写作区支持 Markdown 图片块、拖拽/粘贴图片转 data URL，多图使用公众号兼容的 inline-block 输出。
 - 桌面端：已接入 Tauri 2.x 骨架，可执行 `npm run tauri:build` 打包。
 
 ## 暂未接入

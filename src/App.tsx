@@ -3,10 +3,13 @@ import {
   Check,
   Clipboard,
   FileText,
+  Monitor,
   Moon,
   Palette,
   Save,
   Sparkles,
+  Smartphone,
+  Tablet,
   Type,
 } from "lucide-react";
 import { recommendLayout } from "./domain/aiLayout";
@@ -57,6 +60,7 @@ import type { ArticleAst, LayoutRecommendation, StyleOverrides } from "./domain/
 import { renderWechatHtml } from "./domain/wechatRenderer";
 
 type Workspace = "writer" | "layout";
+type PreviewDevice = "phone" | "tablet" | "desktop";
 
 const storage = typeof window === "undefined" ? undefined : window.localStorage;
 const WriterEditor = lazy(() => import("./components/WriterEditor"));
@@ -75,6 +79,7 @@ export default function App() {
   const [userOverrides, setUserOverrides] = useState<StyleOverrides>({});
   const [copied, setCopied] = useState(false);
   const [darkPreview, setDarkPreview] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("phone");
   const [writingTopic, setWritingTopic] = useState("早起习惯");
   const [writingStyle, setWritingStyle] = useState("清晰实用");
   const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings(storage));
@@ -118,6 +123,11 @@ export default function App() {
   function handleDraftChange(value: string) {
     setDraftText(value);
     setArticle(plainTextToAst(value));
+  }
+
+  function handleArticleChange(nextArticle: ArticleAst) {
+    setArticle(nextArticle);
+    setDraftText(astToPlainText(nextArticle));
   }
 
   function openArticle(nextArticle: ArticleAst) {
@@ -399,7 +409,7 @@ export default function App() {
               <WriterEditor
                 article={article}
                 externalVersion={editorVersion}
-                onChangeText={handleDraftChange}
+                onChangeArticle={handleArticleChange}
                 onInsertImageFiles={(files) => void insertImageFiles(files)}
                 isSupportedImageFile={isSupportedImageFile}
               />
@@ -487,8 +497,22 @@ export default function App() {
                 {darkPreview ? "暗色" : "明色"}
               </button>
             </div>
-            <div className={darkPreview ? "phone-frame dark" : "phone-frame"}>
-              <div dangerouslySetInnerHTML={{ __html: html }} />
+            <div className="device-switch" aria-label="预览设备">
+              <button className={previewDevice === "phone" ? "active" : ""} onClick={() => setPreviewDevice("phone")}>
+                <Smartphone size={15} />
+                手机
+              </button>
+              <button className={previewDevice === "tablet" ? "active" : ""} onClick={() => setPreviewDevice("tablet")}>
+                <Tablet size={15} />
+                平板
+              </button>
+              <button className={previewDevice === "desktop" ? "active" : ""} onClick={() => setPreviewDevice("desktop")}>
+                <Monitor size={15} />
+                桌面
+              </button>
+            </div>
+            <div className={`device-frame ${previewDevice}${darkPreview ? " dark" : ""}`}>
+              <div className="device-screen" dangerouslySetInnerHTML={{ __html: html }} />
             </div>
 
             <section className="inspector">

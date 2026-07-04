@@ -61,6 +61,14 @@ export function getBlockLabel(block: ArticleBlock): string {
     return `图片：${block.caption ?? "配图"}`;
   }
 
+  if (block.type === "imageGrid") {
+    return `多图：${block.images.length} 张`;
+  }
+
+  if (block.type === "table") {
+    return `表格：${block.rows.length} 行`;
+  }
+
   return "分割线";
 }
 

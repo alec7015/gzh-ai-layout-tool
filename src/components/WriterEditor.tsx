@@ -1,13 +1,21 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { astToTiptapDoc, tiptapDocToPlainText, type TiptapDoc } from "../domain/tiptapAdapter";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { Slice, Fragment } from "@tiptap/pm/model";
+import { ImageGrid } from "./ImageGridExtension";
+import { htmlToCleanArticle } from "../domain/magicPaste";
+import {
+  astToTiptapDoc,
+  tiptapDocToAst,
+  type TiptapDoc,
+} from "../domain/tiptapAdapter";
 import type { ArticleAst } from "../domain/types";
 
 interface WriterEditorProps {
   article: ArticleAst;
   externalVersion: number;
-  onChangeText(text: string): void;
+  onChangeArticle(article: ArticleAst): void;
   onInsertImageFiles(files: FileList | File[]): void;
   isSupportedImageFile(file: File): boolean;
 }
@@ -15,27 +23,72 @@ interface WriterEditorProps {
 export default function WriterEditor({
   article,
   externalVersion,
-  onChangeText,
+  onChangeArticle,
   onInsertImageFiles,
   isSupportedImageFile,
 }: WriterEditorProps) {
+  const articleRef = useRef(article);
   const editor = useEditor(
     {
-      extensions: [StarterKit],
+      extensions: [
+        StarterKit,
+        Table.configure({ resizable: false }),
+        TableRow,
+        TableHeader,
+        TableCell,
+        ImageGrid,
+      ],
       content: astToTiptapDoc(article),
       editorProps: {
         attributes: { "aria-label": "写作编辑区" },
+        handlePaste: (view, event) => {
+          const clipboard = event.clipboardData;
+          if (!clipboard) {
+            return false;
+          }
+
+          if (Array.from(clipboard.files).some(isSupportedImageFile)) {
+            return false;
+          }
+
+          const html = clipboard.getData("text/html");
+          if (!html.trim() || html.includes("data-pm-slice")) {
+            return false;
+          }
+
+          event.preventDefault();
+          const nextDoc = astToTiptapDoc(htmlToCleanArticle(html));
+          const nodes = nextDoc.content.map((node) => view.state.schema.nodeFromJSON(node));
+          view.dispatch(view.state.tr.replaceSelection(new Slice(Fragment.fromArray(nodes), 0, 0)));
+          return true;
+        },
       },
       onUpdate: ({ editor: currentEditor }) => {
-        onChangeText(tiptapDocToPlainText(currentEditor.getJSON() as TiptapDoc));
+        onChangeArticle(tiptapDocToAst(currentEditor.getJSON() as TiptapDoc, articleRef.current));
       },
     },
     []
   );
 
   useEffect(() => {
-    editor?.commands.setContent(astToTiptapDoc(article), { emitUpdate: false });
+    articleRef.current = article;
+  }, [article]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) {
+      return;
+    }
+
+    editor.commands.setContent(astToTiptapDoc(article), { emitUpdate: false });
   }, [article, editor, externalVersion]);
+
+  function insertImageGrid() {
+    if (!editor || editor.isDestroyed) {
+      return;
+    }
+
+    editor.chain().focus().insertImageGrid({ layout: "two" }).run();
+  }
 
   return (
     <div
@@ -53,6 +106,11 @@ export default function WriterEditor({
         }
       }}
     >
+      <div className="editor-toolbar">
+        <button type="button" onClick={insertImageGrid}>
+          插入多图
+        </button>
+      </div>
       <EditorContent editor={editor} />
     </div>
   );

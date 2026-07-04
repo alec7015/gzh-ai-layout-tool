@@ -1,4 +1,4 @@
-import type { ArticleAst, ArticleBlock } from "./types";
+import type { ArticleAst, ArticleBlock, TableRow, TextRun } from "./types";
 
 const DRAFT_KEY = "gzh-current-draft";
 
@@ -47,23 +47,61 @@ export function createSampleArticle(): ArticleAst {
 }
 
 export function plainTextToAst(input: string): ArticleAst {
+  return markdownToAst(input);
+}
+
+export function markdownToAst(input: string): ArticleAst {
   const lines = input
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trim());
 
-  const title = lines[0] || "未命名草稿";
+  const titleIndex = lines.findIndex(Boolean);
+  const firstContentLine = titleIndex >= 0 ? lines[titleIndex] : "";
+  const title = stripHeadingMarker(firstContentLine) || "未命名草稿";
   const blocks: ArticleBlock[] = [{ id: createBlockId("title", 0), type: "title", text: title, style: {} }];
   let listItems: string[] = [];
+  let orderedList = false;
 
-  lines.slice(1).forEach((line, index) => {
-    if (line.startsWith("- ")) {
-      listItems.push(line.slice(2).trim());
-      return;
+  for (let index = Math.max(titleIndex + 1, 1); index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line) {
+      flushList(blocks, listItems, orderedList);
+      listItems = [];
+      orderedList = false;
+      continue;
     }
 
-    flushList(blocks, listItems);
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    const ordered = line.match(/^\d+[.)]\s+(.+)$/);
+    if (unordered || ordered) {
+      const isOrdered = Boolean(ordered);
+      if (listItems.length > 0 && orderedList !== isOrdered) {
+        flushList(blocks, listItems, orderedList);
+        listItems = [];
+      }
+      orderedList = isOrdered;
+      listItems.push((unordered?.[1] ?? ordered?.[1] ?? "").trim());
+      continue;
+    }
+
+    if (isTableStart(lines, index)) {
+      flushList(blocks, listItems, orderedList);
+      listItems = [];
+      orderedList = false;
+      const parsed = readTable(lines, index);
+      blocks.push({
+        id: createBlockId("table", index),
+        type: "table",
+        rows: parsed.rows,
+        style: {},
+      });
+      index = parsed.nextIndex - 1;
+      continue;
+    }
+
+    flushList(blocks, listItems, orderedList);
     listItems = [];
+    orderedList = false;
 
     const imageMatch = line.match(/^!\[(.*)]\((.+)\)$/);
     if (imageMatch) {
@@ -74,28 +112,28 @@ export function plainTextToAst(input: string): ArticleAst {
         caption: imageMatch[1] || "配图",
         style: {},
       });
-      return;
+      continue;
     }
 
     if (line.startsWith("> ")) {
       blocks.push({ id: createBlockId("quote", index), type: "quote", text: line.slice(2).trim(), style: {} });
-      return;
+      continue;
     }
 
-    if (isHeadingLine(line, index)) {
-      blocks.push({ id: createBlockId("heading", index), type: "heading", text: line, style: {} });
-      return;
+    if (line.startsWith("#") || isHeadingLine(line, index)) {
+      blocks.push({ id: createBlockId("heading", index), type: "heading", text: stripHeadingMarker(line), style: {} });
+      continue;
     }
 
     blocks.push({
       id: createBlockId("paragraph", index),
       type: "paragraph",
-      runs: [{ text: line }],
+      runs: parseRuns(line),
       style: {},
     });
-  });
+  }
 
-  flushList(blocks, listItems);
+  flushList(blocks, listItems, orderedList);
 
   return {
     meta: { title },
@@ -118,6 +156,10 @@ export function astToPlainText(article: ArticleAst): string {
           return block.items.map((item) => `- ${item}`).join("\n");
         case "image":
           return `![${block.caption ?? "配图"}](${block.src})`;
+        case "imageGrid":
+          return block.images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+        case "table":
+          return tableToMarkdown(block.rows);
         case "divider":
           return "---";
       }
@@ -146,7 +188,7 @@ export function saveDraft(storage: DraftStorage | undefined, article: ArticleAst
   storage?.setItem(DRAFT_KEY, JSON.stringify(article));
 }
 
-function flushList(blocks: ArticleBlock[], items: string[]): void {
+function flushList(blocks: ArticleBlock[], items: string[], ordered = false): void {
   if (items.length === 0) {
     return;
   }
@@ -154,16 +196,90 @@ function flushList(blocks: ArticleBlock[], items: string[]): void {
   blocks.push({
     id: createBlockId("list", blocks.length),
     type: "list",
-    ordered: false,
+    ordered,
     items,
     style: {},
   });
 }
 
 function isHeadingLine(line: string, index: number): boolean {
-  return index === 0 || (line.length <= 16 && !/[。！？.!?]$/.test(line));
+  return index === 0 || (line.length <= 16 && !/[。！？.!?*_`|]$/.test(line) && !/[*_`|]/.test(line));
 }
 
 function createBlockId(type: string, index: number): string {
   return `${type}-${index + 1}`;
+}
+
+function stripHeadingMarker(line: string): string {
+  return line.replace(/^#{1,6}\s+/, "").trim();
+}
+
+function parseRuns(line: string): TextRun[] {
+  const runs: TextRun[] = [];
+  const pattern = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(line))) {
+    if (match.index > lastIndex) {
+      runs.push({ text: line.slice(lastIndex, match.index) });
+    }
+
+    const boldText = match[2] ?? match[3];
+    const italicText = match[4] ?? match[5];
+    runs.push({
+      text: boldText ?? italicText ?? match[0],
+      marks: boldText ? ["bold"] : ["italic"],
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < line.length) {
+    runs.push({ text: line.slice(lastIndex) });
+  }
+
+  return runs.length > 0 ? runs : [{ text: line }];
+}
+
+function isTableStart(lines: string[], index: number): boolean {
+  return isTableRow(lines[index]) && isTableSeparator(lines[index + 1] ?? "");
+}
+
+function readTable(lines: string[], startIndex: number): { rows: TableRow[]; nextIndex: number } {
+  const rows: TableRow[] = [{ cells: splitTableRow(lines[startIndex]), header: true }];
+  let index = startIndex + 2;
+
+  while (index < lines.length && isTableRow(lines[index])) {
+    rows.push({ cells: splitTableRow(lines[index]) });
+    index += 1;
+  }
+
+  return { rows, nextIndex: index };
+}
+
+function isTableRow(line: string): boolean {
+  return line.includes("|") && splitTableRow(line).length >= 2;
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(line);
+}
+
+function splitTableRow(line: string): string[] {
+  return line
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function tableToMarkdown(rows: TableRow[]): string {
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const header = rows[0].cells;
+  const divider = header.map(() => "---");
+  const body = rows.slice(1).map((row) => row.cells);
+  return [header, divider, ...body].map((cells) => `| ${cells.join(" | ")} |`).join("\n");
 }

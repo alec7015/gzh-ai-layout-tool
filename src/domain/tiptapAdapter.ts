@@ -1,4 +1,4 @@
-import type { ArticleAst, ArticleBlock, TextRun } from "./types";
+import type { ArticleAst, ArticleBlock, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
 
 export type TiptapNode = {
   type: string;
@@ -20,6 +20,20 @@ export function astToTiptapDoc(article: ArticleAst): TiptapDoc {
   };
 }
 
+export function tiptapDocToAst(doc: TiptapDoc, previous?: ArticleAst): ArticleAst {
+  const blocks = (doc.content ?? []).map((node, index) => nodeToBlock(node, index)).filter(Boolean) as ArticleBlock[];
+  const firstTitle = blocks.find((block): block is Extract<ArticleBlock, { type: "title" }> => block.type === "title");
+  const title = firstTitle?.text || previous?.meta.title || "未命名草稿";
+
+  return {
+    meta: {
+      ...(previous?.meta ?? {}),
+      title,
+    },
+    blocks: blocks.length > 0 ? blocks : [{ id: "title-1", type: "title", text: title, style: {} }],
+  };
+}
+
 export function tiptapDocToPlainText(doc: TiptapDoc): string {
   return doc.content.map(nodeToPlainText).filter(Boolean).join("\n\n");
 }
@@ -34,7 +48,8 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   }
 
   if (block.type === "paragraph") {
-    return { type: "paragraph", content: runsToNodes(block.runs) };
+    const content = runsToNodes(block.runs);
+    return content.length > 0 ? { type: "paragraph", content } : { type: "paragraph" };
   }
 
   if (block.type === "quote") {
@@ -61,19 +76,138 @@ function blockToNode(block: ArticleBlock): TiptapNode {
     };
   }
 
+  if (block.type === "imageGrid") {
+    return {
+      type: "imageGrid",
+      attrs: {
+        images: block.images,
+        layout: block.layout,
+        gap: block.gap,
+        radius: block.radius,
+      },
+    };
+  }
+
+  if (block.type === "table") {
+    return {
+      type: "table",
+      content: block.rows.map((row) => ({
+        type: "tableRow",
+        content: row.cells.map((cell) => ({
+          type: row.header ? "tableHeader" : "tableCell",
+          content: [{ type: "paragraph", content: [{ type: "text", text: cell }] }],
+        })),
+      })),
+    };
+  }
+
   return { type: "horizontalRule" };
 }
 
+function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
+  if (node.type === "heading") {
+    const text = inlineText(node).trim();
+    return {
+      id: createBlockId(node.attrs?.level === 1 ? "title" : "heading", index),
+      type: node.attrs?.level === 1 ? "title" : "heading",
+      text,
+      style: {},
+    };
+  }
+
+  if (node.type === "paragraph") {
+    const text = inlineText(node).trim();
+    const image = text.match(/^!\[(.*)]\((.+)\)$/);
+    if (image) {
+      return {
+        id: createBlockId("image", index),
+        type: "image",
+        src: image[2],
+        caption: image[1] || "配图",
+        style: {},
+      };
+    }
+
+    return {
+      id: createBlockId("paragraph", index),
+      type: "paragraph",
+      runs: inlineRuns(node),
+      style: {},
+    };
+  }
+
+  if (node.type === "blockquote") {
+    return {
+      id: createBlockId("quote", index),
+      type: "quote",
+      text: inlineText(node).trim(),
+      style: {},
+    };
+  }
+
+  if (node.type === "bulletList" || node.type === "orderedList") {
+    return {
+      id: createBlockId("list", index),
+      type: "list",
+      ordered: node.type === "orderedList",
+      items: (node.content ?? []).map((item) => inlineText(item).trim()).filter(Boolean),
+      style: {},
+    };
+  }
+
+  if (node.type === "imageGrid") {
+    const attrs = node.attrs ?? {};
+    return {
+      id: createBlockId("image-grid", index),
+      type: "imageGrid",
+      images: Array.isArray(attrs.images) ? (attrs.images as GridImage[]) : [],
+      layout: isGridLayout(attrs.layout) ? attrs.layout : "two",
+      gap: Number(attrs.gap ?? 6),
+      radius: Number(attrs.radius ?? 8),
+      style: {},
+    };
+  }
+
+  if (node.type === "table") {
+    return {
+      id: createBlockId("table", index),
+      type: "table",
+      rows: tableRowsFromNode(node),
+      style: {},
+    };
+  }
+
+  if (node.type === "horizontalRule") {
+    return { id: createBlockId("divider", index), type: "divider", style: {} };
+  }
+
+  return null;
+}
+
 function headingNode(text: string, level: number): TiptapNode {
-  return { type: "heading", attrs: { level }, content: [{ type: "text", text }] };
+  return text ? { type: "heading", attrs: { level }, content: [{ type: "text", text }] } : { type: "heading", attrs: { level } };
 }
 
 function runsToNodes(runs: TextRun[]): TiptapNode[] {
-  return runs.map((run) => ({
-    type: "text",
-    text: run.text,
-    marks: run.marks?.map((mark) => ({ type: mark === "bold" ? "bold" : "italic" })),
-  }));
+  return runs
+    .filter((run) => run.text.length > 0)
+    .map((run) => ({
+      type: "text",
+      text: run.text,
+      marks: run.marks?.map((mark) => ({ type: mark === "bold" ? "bold" : "italic" })),
+    }));
+}
+
+function tableRowsFromNode(node: TiptapNode): TableRow[] {
+  return (node.content ?? [])
+    .filter((row) => row.type === "tableRow")
+    .map((row) => {
+      const cells = row.content ?? [];
+      return {
+        header: cells.length > 0 && cells.every((cell) => cell.type === "tableHeader"),
+        cells: cells.map((cell) => inlineText(cell).trim()),
+      };
+    });
 }
 
 function nodeToPlainText(node: TiptapNode): string {
@@ -91,6 +225,15 @@ function nodeToPlainText(node: TiptapNode): string {
       .join("\n");
   }
 
+  if (node.type === "imageGrid") {
+    const images = Array.isArray(node.attrs?.images) ? node.attrs.images as Array<{ src: string; alt?: string }> : [];
+    return images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+  }
+
+  if (node.type === "table") {
+    return tableToMarkdown(tableRowsFromNode(node));
+  }
+
   if (node.type === "horizontalRule") {
     return "---";
   }
@@ -104,4 +247,42 @@ function inlineText(node: TiptapNode): string {
   }
 
   return (node.content ?? []).map(inlineText).join("");
+}
+
+function inlineRuns(node: TiptapNode): TextRun[] {
+  const runs: TextRun[] = [];
+  collectRuns(node, runs);
+  return runs;
+}
+
+function collectRuns(node: TiptapNode, runs: TextRun[]): void {
+  if (node.text !== undefined) {
+    const marks = node.marks
+      ?.map((mark) => mark.type)
+      .filter((mark): mark is TextMark => mark === "bold" || mark === "italic");
+    runs.push({ text: node.text, marks: marks?.length ? marks : undefined });
+    return;
+  }
+
+  (node.content ?? []).forEach((child) => collectRuns(child, runs));
+}
+
+function tableToMarkdown(rows: TableRow[]): string {
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const header = rows[0].cells;
+  const divider = header.map(() => "---");
+  return [header, divider, ...rows.slice(1).map((row) => row.cells)]
+    .map((cells) => `| ${cells.join(" | ")} |`)
+    .join("\n");
+}
+
+function createBlockId(type: string, index: number): string {
+  return `${type}-${index + 1}`;
+}
+
+function isGridLayout(value: unknown): value is GridLayout {
+  return value === "two" || value === "three" || value === "quad";
 }

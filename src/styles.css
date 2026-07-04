@@ -72,6 +72,10 @@ button {
   min-width: 0;
 }
 
+.brand > div:last-child {
+  min-width: 0;
+}
+
 .brand-mark {
   width: 36px;
   height: 36px;
@@ -93,7 +97,7 @@ button {
 }
 
 .brand span {
-  max-width: 620px;
+  max-width: min(620px, 100%);
   color: #737d88;
   font-size: 12px;
   overflow: hidden;
@@ -349,7 +353,7 @@ button {
 
 .preview-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   gap: 14px;
   overflow: hidden;
 }
@@ -368,24 +372,82 @@ button {
   font-size: 12px;
 }
 
-.phone-frame {
-  width: 375px;
-  height: 260px;
+.device-switch {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.device-switch button {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 7px;
+  color: #58636f;
+  background: #f1f3f5;
+  font-size: 12px;
+}
+
+.device-switch .active {
+  color: #ffffff;
+  background: #1f7a5f;
+}
+
+.device-frame {
+  width: 100%;
   min-height: 260px;
-  max-height: 260px;
   margin: 0 auto;
+  border: 10px solid #20262c;
+  border-radius: 30px;
+  background: #20262c;
+  box-shadow: 0 18px 42px rgba(21, 35, 48, 0.16);
+}
+
+.device-frame.phone {
+  max-width: 375px;
+}
+
+.device-frame.tablet {
+  max-width: 768px;
+  border-width: 12px;
+  border-radius: 24px;
+}
+
+.device-frame.desktop {
+  max-width: 100%;
+  border-width: 1px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.device-screen {
+  height: 260px;
   padding: 20px 16px;
   overflow: auto;
   background: #ffffff;
-  border: 10px solid #20262c;
-  border-radius: 30px;
+  border-radius: 20px;
 }
 
-.phone-frame.dark {
+.device-frame.tablet .device-screen {
+  height: 360px;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.device-frame.desktop .device-screen {
+  height: 360px;
+  padding: 24px;
+  border-radius: 8px;
+}
+
+.device-frame.dark .device-screen {
   background: #111820;
 }
 
-.phone-frame.dark > div {
+.device-frame.dark .device-screen > section {
   filter: invert(0.92) hue-rotate(180deg);
 }
 
@@ -576,7 +638,27 @@ button {
 .tiptap-drop-zone {
   width: 100%;
   height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
   overflow: auto;
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e8ecef;
+  background: #ffffff;
+}
+
+.editor-toolbar button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 12px;
+  color: #1f7a5f;
+  background: #edf6f3;
+  font-size: 13px;
 }
 
 .editor-loading {
@@ -620,12 +702,79 @@ button {
   color: #5f6b76;
 }
 
+.ig-block {
+  margin: 16px 0;
+  padding: 10px;
+  border: 1px dashed #cfd7df;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.ig-block[data-selected="true"] {
+  border-color: #1f7a5f;
+  box-shadow: 0 0 0 2px rgba(31, 122, 95, 0.12);
+}
+
+.ig-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ig-toolbar button,
+.ig-empty,
+.ig-grid figcaption button {
+  border: 0;
+  border-radius: 6px;
+  min-height: 28px;
+  padding: 0 9px;
+  color: #46515d;
+  background: #eef1f4;
+  font-size: 12px;
+}
+
+.ig-toolbar .active {
+  color: #ffffff;
+  background: #1f7a5f;
+}
+
+.ig-empty {
+  width: 100%;
+  min-height: 96px;
+  color: #7b8792;
+  background: #ffffff;
+}
+
+.ig-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.ig-grid figure {
+  position: relative;
+  margin: 0;
+}
+
+.ig-grid img {
+  width: 100%;
+  display: block;
+  border-radius: 6px;
+}
+
+.ig-grid figcaption {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  gap: 4px;
+}
+
 @media (max-width: 1240px) {
   .layout-screen {
     grid-template-columns: 224px minmax(440px, 1fr) 390px;
   }
 
-  .phone-frame {
+  .device-frame.phone {
     width: 100%;
     max-width: 350px;
   }
@@ -677,7 +826,7 @@ button {
     padding: 24px 20px;
   }
 
-  .phone-frame {
+  .device-frame {
     max-width: 100%;
   }
 

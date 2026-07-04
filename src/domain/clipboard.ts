@@ -1,11 +1,14 @@
+import { prepareWechatHtml } from "./wechatCopyPipeline";
+
 export async function copyWechatHtml(html: string, plainText: string): Promise<void> {
+  const preparedHtml = await prepareWechatHtml(html);
   const ClipboardItemCtor = window.ClipboardItem;
 
   if (navigator.clipboard?.write && ClipboardItemCtor) {
     try {
       await navigator.clipboard.write([
         new ClipboardItemCtor({
-          "text/html": new Blob([html], { type: "text/html" }),
+          "text/html": new Blob([preparedHtml], { type: "text/html" }),
           "text/plain": new Blob([plainText], { type: "text/plain" }),
         }),
       ]);
@@ -16,7 +19,7 @@ export async function copyWechatHtml(html: string, plainText: string): Promise<v
     }
   }
 
-  copyWithExecCommand(html);
+  copyWithExecCommand(preparedHtml);
 }
 
 function copyWithExecCommand(html: string): void {

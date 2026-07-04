@@ -1,5 +1,6 @@
-import type { ArticleAst, ArticleBlock, StylePreset, TextRun } from "./types";
+import type { ArticleAst, ArticleBlock, StylePreset, TableRow, TextRun } from "./types";
 import { toInlineOverride } from "./blockOverrides";
+import { renderImageGridWechat } from "./imageGrid";
 
 export function renderWechatHtml(article: ArticleAst, preset: StylePreset): string {
   let headingIndex = 0;
@@ -48,6 +49,10 @@ function renderBlock(
       return renderList(block.items, block.ordered, preset, block);
     case "image":
       return renderImage(block.src, block.caption, preset, block);
+    case "imageGrid":
+      return renderImageGridWechat(block);
+    case "table":
+      return renderTable(block.rows, preset, block);
     case "divider":
       return renderDivider(preset, block);
   }
@@ -254,6 +259,40 @@ function renderImage(
         })}">${escapeHtml(caption)}</p>`
       : ""
   }</section>`;
+}
+
+function renderTable(rows: TableRow[], preset: StylePreset, block: ArticleBlock): string {
+  if (rows.length === 0) {
+    return "";
+  }
+
+  const body = rows
+    .map((row) => {
+      const tag = row.header ? "th" : "td";
+      const cells = row.cells
+        .map(
+          (cell) =>
+            `<${tag} style="${style({
+              border: "1px solid #e2e5ea",
+              padding: "8px 10px",
+              background: row.header ? `${preset.palette.primary}14` : "#FFFFFF",
+              color: preset.palette.textMain,
+              "font-weight": row.header ? "600" : "400",
+              "text-align": "left",
+            })}">${escapeHtml(cell)}</${tag}>`
+        )
+        .join("");
+      return `<tr>${cells}</tr>`;
+    })
+    .join("");
+
+  return `<table style="${style({
+    "border-collapse": "collapse",
+    width: "100%",
+    margin: `${preset.rhythm.sectionGap} 0`,
+    "font-size": preset.typography.bodySize,
+    ...toInlineOverride(block.style),
+  })}">${body}</table>`;
 }
 
 function renderDivider(preset: StylePreset, block: ArticleBlock): string {

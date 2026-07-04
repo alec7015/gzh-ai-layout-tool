@@ -5,6 +5,8 @@ export type BlockType =
   | "quote"
   | "list"
   | "image"
+  | "imageGrid"
+  | "table"
   | "divider";
 
 export type TextMark = "bold" | "italic" | "emphasis";
@@ -54,6 +56,31 @@ export interface ImageBlock extends BaseBlock {
   caption?: string;
 }
 
+export type GridLayout = "two" | "three" | "quad";
+
+export interface GridImage {
+  src: string;
+  alt?: string;
+}
+
+export interface ImageGridBlock extends BaseBlock {
+  type: "imageGrid";
+  images: GridImage[];
+  layout: GridLayout;
+  gap: number;
+  radius: number;
+}
+
+export interface TableRow {
+  cells: string[];
+  header?: boolean;
+}
+
+export interface TableBlock extends BaseBlock {
+  type: "table";
+  rows: TableRow[];
+}
+
 export interface DividerBlock extends BaseBlock {
   type: "divider";
 }
@@ -65,6 +92,8 @@ export type ArticleBlock =
   | QuoteBlock
   | ListBlock
   | ImageBlock
+  | ImageGridBlock
+  | TableBlock
   | DividerBlock;
 
 export interface ArticleAst {

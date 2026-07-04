@@ -2,6 +2,14 @@
 
 个人自用的本地版公众号写作与排版工具，按 `gzh_tool_design_v3.md` 开发第一版。
 
+## 公开访问
+
+- GitHub 仓库：https://github.com/alec7015/gzh-ai-layout-tool
+- 在线预览：https://alec7015.github.io/gzh-ai-layout-tool/
+- 源码 ZIP：https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/main.zip
+
+部分平台会限制直接抓取 GitHub 的 `tree/main/子目录` 页面；需要导入源码时建议使用仓库根地址或源码 ZIP。
+
 ## 本地运行
 
 ```bash

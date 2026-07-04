@@ -50,7 +50,7 @@ describe("App", () => {
     expect(screen.getAllByRole("button", { name: "AI 智能排版" }).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("uses a custom target word count and removes redundant content actions", async () => {
+  it("uses custom writing inputs and removes redundant content actions", async () => {
     render(<App />);
 
     await userEvent.click(screen.getByRole("button", { name: "写作台" }));
@@ -58,8 +58,14 @@ describe("App", () => {
     const wordsInput = screen.getByRole("spinbutton", { name: "目标字数" });
     await userEvent.clear(wordsInput);
     await userEvent.type(wordsInput, "1234");
+    await userEvent.clear(screen.getByLabelText("风格"));
+    await userEvent.type(screen.getByLabelText("风格"), "毒舌吐槽");
+    await userEvent.clear(screen.getByLabelText("文体"));
+    await userEvent.type(screen.getByLabelText("文体"), "复盘长文");
 
     expect(wordsInput).toHaveValue(1234);
+    expect(screen.getByLabelText("风格")).toHaveValue("毒舌吐槽");
+    expect(screen.getByLabelText("文体")).toHaveValue("复盘长文");
     expect(screen.queryByText("内容操作")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "润色" })).not.toBeInTheDocument();
   });
@@ -74,7 +80,9 @@ describe("App", () => {
     await userEvent.click(screen.getAllByRole("button", { name: "复制到排版台" })[0]);
 
     expect(screen.queryByText("排版台还没有内容")).not.toBeInTheDocument();
-    expect(screen.getByText("所见即所得版面")).toBeInTheDocument();
+    expect(await screen.findByLabelText("排版工具栏")).toBeInTheDocument();
+    expect(screen.queryByText("微调面板")).not.toBeInTheDocument();
+    expect(screen.getByText("尚未运行")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制到公众号" })).not.toBeDisabled();
   });
 });

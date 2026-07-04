@@ -3,6 +3,20 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Slice, Fragment } from "@tiptap/pm/model";
+import {
+  Bold,
+  Heading2,
+  Image,
+  Italic,
+  LayoutGrid,
+  List,
+  ListOrdered,
+  Minus,
+  Quote,
+  Redo2,
+  Table2,
+  Undo2,
+} from "lucide-react";
 import { BlockMeta } from "./BlockMetaExtension";
 import { ImageGrid } from "./ImageGridExtension";
 import { htmlToCleanArticle } from "../domain/magicPaste";
@@ -33,6 +47,7 @@ export default function WriterEditor({
   readOnly = false,
 }: WriterEditorProps) {
   const articleRef = useRef(article);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editor = useEditor(
     {
       extensions: [
@@ -86,7 +101,7 @@ export default function WriterEditor({
     }
 
     editor.commands.setContent(astToTiptapDoc(article), { emitUpdate: false });
-  }, [article, editor, externalVersion]);
+  }, [editor, externalVersion]);
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) {
@@ -108,6 +123,10 @@ export default function WriterEditor({
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   }
 
+  function insertImageFile() {
+    fileInputRef.current?.click();
+  }
+
   return (
     <div
       className="tiptap-drop-zone"
@@ -125,29 +144,99 @@ export default function WriterEditor({
       }}
     >
       <div className="editor-toolbar">
-        <button type="button" title="小标题" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
-          小标题
-        </button>
-        <button type="button" title="引用/金句" onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
-          引用
-        </button>
-        <button type="button" title="无序列表" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
-          列表
-        </button>
-        <button type="button" title="有序列表" onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
-          编号
-        </button>
-        <button type="button" title="分隔线" onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
-          分隔线
-        </button>
-        <button type="button" title="表格" onClick={insertTable}>
-          表格
-        </button>
-        <button type="button" onClick={insertImageGrid}>
-          插入多图
-        </button>
+        <div className="ribbon-group">
+          <button type="button" title="撤销 Ctrl+Z" disabled={!editor?.can().undo()} onClick={() => editor?.chain().focus().undo().run()}>
+            <Undo2 size={16} />
+          </button>
+          <button type="button" title="重做 Ctrl+Y" disabled={!editor?.can().redo()} onClick={() => editor?.chain().focus().redo().run()}>
+            <Redo2 size={16} />
+          </button>
+        </div>
+        <span className="ribbon-divider" />
+        <div className="ribbon-group">
+          <button className={editor?.isActive("bold") ? "active" : ""} type="button" title="加粗 Ctrl+B" onClick={() => editor?.chain().focus().toggleBold().run()}>
+            <Bold size={16} />
+          </button>
+          <button className={editor?.isActive("italic") ? "active" : ""} type="button" title="斜体 Ctrl+I" onClick={() => editor?.chain().focus().toggleItalic().run()}>
+            <Italic size={16} />
+          </button>
+        </div>
+        <span className="ribbon-divider" />
+        <div className="ribbon-group">
+          <button className={editor?.isActive("heading", { level: 2 }) ? "active" : ""} type="button" title="小标题" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+            <Heading2 size={16} />
+          </button>
+          <button className={editor?.isActive("blockquote") ? "active" : ""} type="button" title="引用/金句" onClick={() => editor?.chain().focus().toggleBlockquote().run()}>
+            <Quote size={16} />
+          </button>
+          <button className={editor?.isActive("bulletList") ? "active" : ""} type="button" title="无序列表" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+            <List size={16} />
+          </button>
+          <button className={editor?.isActive("orderedList") ? "active" : ""} type="button" title="有序列表" onClick={() => editor?.chain().focus().toggleOrderedList().run()}>
+            <ListOrdered size={16} />
+          </button>
+        </div>
+        <span className="ribbon-divider" />
+        <div className="ribbon-group">
+          <button type="button" title="分隔线" onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
+            <Minus size={16} />
+          </button>
+          <button type="button" title="表格" onClick={insertTable}>
+            <Table2 size={16} />
+          </button>
+          <button type="button" title="图片" onClick={insertImageFile}>
+            <Image size={16} />
+          </button>
+          <button type="button" title="插入多图" onClick={insertImageGrid}>
+            <LayoutGrid size={16} />
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          className="hidden-file-input"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => {
+            if (event.target.files) {
+              onInsertImageFiles(event.target.files);
+              event.target.value = "";
+            }
+          }}
+        />
+        {editor?.isActive("table") ? (
+          <>
+            <span className="ribbon-divider" />
+            <div className="ribbon-group table-tools" aria-label="表格工具">
+              <button type="button" title="左插列" onClick={() => editor?.chain().focus().addColumnBefore().run()}>
+                左列
+              </button>
+              <button type="button" title="右插列" onClick={() => editor?.chain().focus().addColumnAfter().run()}>
+                右列
+              </button>
+              <button type="button" title="删除列" onClick={() => editor?.chain().focus().deleteColumn().run()}>
+                删列
+              </button>
+              <button type="button" title="上插行" onClick={() => editor?.chain().focus().addRowBefore().run()}>
+                上行
+              </button>
+              <button type="button" title="下插行" onClick={() => editor?.chain().focus().addRowAfter().run()}>
+                下行
+              </button>
+              <button type="button" title="删除行" onClick={() => editor?.chain().focus().deleteRow().run()}>
+                删行
+              </button>
+              <button type="button" title="表头行" onClick={() => editor?.chain().focus().toggleHeaderRow().run()}>
+                表头
+              </button>
+              <button type="button" title="删除表格" onClick={() => editor?.chain().focus().deleteTable().run()}>
+                删表
+              </button>
+            </div>
+          </>
+        ) : null}
+        <span className="ribbon-spacer" />
         {onCopyToLayout ? (
-          <button type="button" onClick={onCopyToLayout}>
+          <button className="toolbar-primary" type="button" onClick={onCopyToLayout}>
             复制到排版台
           </button>
         ) : null}

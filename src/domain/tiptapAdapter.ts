@@ -58,7 +58,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
     return {
       type: "blockquote",
       attrs: blockAttrs(block),
-      content: [{ type: "paragraph", content: [{ type: "text", text: block.text }] }],
+      content: [{ type: "paragraph", content: inlineContent(block.text) }],
     };
   }
 
@@ -68,7 +68,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
       attrs: blockAttrs(block),
       content: block.items.map((item) => ({
         type: "listItem",
-        content: [{ type: "paragraph", content: [{ type: "text", text: item }] }],
+        content: [{ type: "paragraph", content: inlineContent(item) }],
       })),
     };
   }
@@ -102,7 +102,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
         type: "tableRow",
         content: row.cells.map((cell) => ({
           type: row.header ? "tableHeader" : "tableCell",
-          content: [{ type: "paragraph", content: [{ type: "text", text: cell }] }],
+          content: [{ type: "paragraph", content: inlineContent(cell) }],
         })),
       })),
     };
@@ -194,6 +194,10 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
 function headingNode(text: string, level: number, block: ArticleBlock): TiptapNode {
   const attrs = { level, ...blockAttrs(block) };
   return text ? { type: "heading", attrs, content: [{ type: "text", text }] } : { type: "heading", attrs };
+}
+
+function inlineContent(text: string): TiptapNode[] | undefined {
+  return text.length > 0 ? [{ type: "text", text }] : undefined;
 }
 
 function runsToNodes(runs: TextRun[]): TiptapNode[] {

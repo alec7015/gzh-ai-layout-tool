@@ -2,17 +2,15 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Clipboard,
-  FileText,
   Monitor,
   Moon,
   Palette,
-  Save,
   Settings,
   Sparkles,
   Smartphone,
   Tablet,
-  Type,
 } from "lucide-react";
+import { EditorBoundary } from "./components/EditorBoundary";
 import { SettingsModal } from "./components/SettingsModal";
 import { recommendLayout } from "./domain/aiLayout";
 import { callChatCompletionsJson, callChatCompletionsText } from "./domain/aiClient";
@@ -57,7 +55,6 @@ import {
   isSupportedImageFile,
   readImageFileAsDataUrl,
 } from "./domain/imageAssets";
-import { setBlockOverride } from "./domain/blockOverrides";
 import { createFeedback, type Feedback } from "./domain/feedback";
 import { mergeStylePreset } from "./domain/styleEngine";
 import { defaultStylePreset, stylePresets } from "./domain/stylePresets";
@@ -67,6 +64,10 @@ import { renderWechatHtml } from "./domain/wechatRenderer";
 type Workspace = "writer" | "layout";
 type PreviewDevice = "phone" | "tablet" | "desktop";
 type BusyState = null | "writing" | "format" | "layout";
+type LayoutAiStatus =
+  | { phase: "idle" }
+  | { phase: "running" }
+  | { phase: "success" | "fallback" | "error"; message: string; at: number };
 
 const storage = typeof window === "undefined" ? undefined : window.localStorage;
 const WriterEditor = lazy(() => import("./components/WriterEditor"));
@@ -98,6 +99,8 @@ export default function App() {
   const [settingsTestMessage, setSettingsTestMessage] = useState("可先测试连接，再开始写作。");
   const [customStyles, setCustomStyles] = useState(() => loadCustomStyles(storage));
   const [editorVersion, setEditorVersion] = useState(0);
+  const [layoutEditorVersion, setLayoutEditorVersion] = useState(0);
+  const [layoutAiStatus, setLayoutAiStatus] = useState<LayoutAiStatus>({ phase: "idle" });
   const [feedback, setFeedback] = useState<Feedback>(() =>
     createFeedback("info", "准备就绪，可以开始写作或排版。")
   );
@@ -160,10 +163,15 @@ export default function App() {
     setEditorVersion((version) => version + 1);
   }
 
+  function openLayoutArticle(nextArticle: ArticleAst | null) {
+    setLayoutArticle(nextArticle);
+    setLayoutEditorVersion((version) => version + 1);
+  }
+
   function openDraftFromLibrary(library: ReturnType<typeof loadDraftLibrary>) {
     const draft = getCurrentDraft(library);
     openArticle(draft.article);
-    setLayoutArticle(draft.layoutArticle ?? null);
+    openLayoutArticle(draft.layoutArticle ?? null);
   }
 
   function createNewDraft() {
@@ -214,7 +222,7 @@ export default function App() {
     }
 
     setDraftLibrary((current) => createVersionSnapshot(updateCurrentDraftArticle(current, article), "复制到排版台"));
-    setLayoutArticle(article);
+    openLayoutArticle(article);
     setWorkspace("layout");
   }
 
@@ -251,9 +259,9 @@ export default function App() {
         {
           ...buildWritingRequest({
             topic: writingTopic,
-            style: writingStyle,
+            style: writingStyle.trim() || "清晰实用",
             words: writingWords,
-            genre: writingGenre,
+            genre: writingGenre.trim() || "干货教程",
             outline: writingOutline,
           }),
           stream: true,
@@ -385,21 +393,21 @@ export default function App() {
     setFeedback(createFeedback("success", "已保存为我的版式。"));
   }
 
-  function setSelectedBlockStyle(blockId: string, key: string, value: string) {
-    setLayoutArticle((current) =>
-      current ? setBlockOverride(current, blockId, key, value) : current
-    );
-  }
-
   async function runSmartLayout() {
     if (busy) {
       return;
     }
     if (!layoutArticle) {
+      setLayoutAiStatus({
+        phase: "error",
+        message: "排版台还没有内容",
+        at: Date.now(),
+      });
       setFeedback(createFeedback("error", "排版台还没有内容，请先从写作台复制当前稿。"));
       return;
     }
     setBusy("layout");
+    setLayoutAiStatus({ phase: "running" });
     setFeedback(createFeedback("info", "正在分析版式…"));
     try {
       const result = await callChatCompletionsJson<unknown>(
@@ -411,10 +419,25 @@ export default function App() {
       setRecommendation(next);
       setSelectedStyleId(next.styleId);
       if (coerced) {
+        setLayoutAiStatus({
+          phase: "success",
+          message: `已应用模型建议：${allStylePresets.find((item) => item.id === next.styleId)?.name ?? next.styleId}`,
+          at: Date.now(),
+        });
         setFeedback(createFeedback("success", "已根据模型建议完成版式推荐。"));
       } else if (result.ok) {
+        setLayoutAiStatus({
+          phase: "fallback",
+          message: "模型返回版式不可用，已用本地规则推荐",
+          at: Date.now(),
+        });
         setFeedback(createFeedback("info", "模型返回版式不可用，已使用本地规则推荐。"));
       } else {
+        setLayoutAiStatus({
+          phase: "fallback",
+          message: `${result.message} 已用本地规则推荐`,
+          at: Date.now(),
+        });
         setFeedback(createFeedback("info", `${result.message} 已使用本地规则推荐版式。`));
       }
     } finally {
@@ -456,6 +479,26 @@ export default function App() {
       "decorations.footer": "follow-card",
       "decorations.footerText": text,
     }));
+  }
+
+  function updateLayoutSettings(next: {
+    themeColor?: string;
+    bodySize?: string;
+    paragraphGap?: string;
+    footerText?: string;
+  }) {
+    if (next.themeColor !== undefined) {
+      setThemeColor(next.themeColor);
+    }
+    if (next.bodySize !== undefined) {
+      setBodySize(next.bodySize);
+    }
+    if (next.paragraphGap !== undefined) {
+      setParagraphGap(next.paragraphGap);
+    }
+    if (next.footerText !== undefined) {
+      setFooterText(next.footerText);
+    }
   }
 
   return (
@@ -557,15 +600,17 @@ export default function App() {
               </label>
               <label className="writer-field">
                 风格
-                <select
+                <input
+                  list="writing-style-presets"
                   value={writingStyle}
                   onChange={(event) => setWritingStyle(event.target.value)}
-                >
-                  <option value="清晰实用">清晰实用</option>
-                  <option value="温柔走心">温柔走心</option>
-                  <option value="克制专业">克制专业</option>
-                  <option value="轻松友好">轻松友好</option>
-                </select>
+                  placeholder="选择或输入自定义风格"
+                />
+                <datalist id="writing-style-presets">
+                  {["清晰实用", "温柔走心", "克制专业", "轻松友好"].map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
               </label>
               <label className="writer-field">
                 目标字数
@@ -592,16 +637,17 @@ export default function App() {
               </div>
               <label className="writer-field">
                 文体
-                <select
+                <input
+                  list="writing-genre-presets"
                   value={writingGenre}
                   onChange={(event) => setWritingGenre(event.target.value)}
-                >
-                  <option value="清单体">清单体</option>
-                  <option value="观点文">观点文</option>
-                  <option value="干货教程">干货教程</option>
-                  <option value="故事叙述">故事叙述</option>
-                  <option value="资讯速览">资讯速览</option>
-                </select>
+                  placeholder="选择或输入自定义文体"
+                />
+                <datalist id="writing-genre-presets">
+                  {["清单体", "观点文", "干货教程", "故事叙述", "资讯速览"].map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
               </label>
               <label className="writer-field">
                 要点/大纲
@@ -622,17 +668,19 @@ export default function App() {
             </section>
           </aside>
           <section className="writing-area">
-            <Suspense fallback={<div className="editor-loading">正在打开写作台...</div>}>
-              <WriterEditor
-                article={article}
-                externalVersion={editorVersion}
-                onChangeArticle={handleArticleChange}
-                onInsertImageFiles={(files) => void insertImageFiles(files)}
-                isSupportedImageFile={isSupportedImageFile}
-                onCopyToLayout={copyToLayout}
-                readOnly={busy === "writing"}
-              />
-            </Suspense>
+            <EditorBoundary onReset={() => setEditorVersion((version) => version + 1)}>
+              <Suspense fallback={<div className="editor-loading">正在打开写作台...</div>}>
+                <WriterEditor
+                  article={article}
+                  externalVersion={editorVersion}
+                  onChangeArticle={handleArticleChange}
+                  onInsertImageFiles={(files) => void insertImageFiles(files)}
+                  isSupportedImageFile={isSupportedImageFile}
+                  onCopyToLayout={copyToLayout}
+                  readOnly={busy === "writing"}
+                />
+              </Suspense>
+            </EditorBoundary>
           </section>
           <aside className="writer-meta">
             <h2>内容 AST</h2>
@@ -679,6 +727,14 @@ export default function App() {
               <span>AI 推荐</span>
               <strong>{allStylePresets.find((item) => item.id === recommendation.styleId)?.name}</strong>
               <p>{recommendation.reason}</p>
+              <div className={`layout-ai-status ${layoutAiStatus.phase}`}>
+                <i />
+                {layoutAiStatus.phase === "idle"
+                  ? "尚未运行"
+                  : layoutAiStatus.phase === "running"
+                    ? "分析中…"
+                    : `${layoutAiStatus.message} · ${new Date(layoutAiStatus.at).toLocaleTimeString()}`}
+              </div>
               <button disabled={busy !== null || !layoutArticle} onClick={() => void runSmartLayout()}>
                 {busy === "layout" ? "分析中…" : "AI智能排版·重新分析"}
               </button>
@@ -709,22 +765,26 @@ export default function App() {
           </aside>
 
           <section className="design-canvas">
-            <div className="canvas-toolbar">
-              <span>
-                <FileText size={16} />
-                所见即所得版面
-              </span>
-              <button onClick={() => setUserOverrides({})}>恢复默认</button>
-            </div>
             {layoutArticle ? (
-              <Suspense fallback={<div className="editor-loading">正在打开排版画布...</div>}>
-                <LayoutEditor
-                  article={layoutArticle}
-                  preset={mergedPreset}
-                  onChangeArticle={(nextArticle) => setLayoutArticle(nextArticle)}
-                  onSetBlockStyle={setSelectedBlockStyle}
-                />
-              </Suspense>
+              <EditorBoundary onReset={() => setLayoutEditorVersion((version) => version + 1)}>
+                <Suspense fallback={<div className="editor-loading">正在打开排版画布...</div>}>
+                  <LayoutEditor
+                    article={layoutArticle}
+                    externalVersion={layoutEditorVersion}
+                    preset={mergedPreset}
+                    onChangeArticle={(nextArticle) => setLayoutArticle(nextArticle)}
+                    onResetStyle={() => setUserOverrides({})}
+                    onSaveStyle={saveCurrentStyle}
+                    settings={{
+                      themeColor: String(mergedPreset.palette.primary),
+                      bodySize: String(mergedPreset.typography.bodySize),
+                      paragraphGap: String(mergedPreset.rhythm.paragraphGap),
+                      footerText: String(mergedPreset.decorations.footerText ?? ""),
+                    }}
+                    onSettingsChange={updateLayoutSettings}
+                  />
+                </Suspense>
+              </EditorBoundary>
             ) : (
               <section className="layout-empty">
                 <h2>排版台还没有内容</h2>
@@ -760,65 +820,19 @@ export default function App() {
             </div>
             <div className={`device-frame ${previewDevice}${darkPreview ? " dark" : ""}`}>
               {layoutArticle ? (
-                <div className="device-screen" dangerouslySetInnerHTML={{ __html: layoutHtml }} />
+                <div className="device-screen">
+                  {previewDevice === "desktop" ? (
+                    <div className="desktop-column" dangerouslySetInnerHTML={{ __html: layoutHtml }} />
+                  ) : (
+                    <div dangerouslySetInnerHTML={{ __html: layoutHtml }} />
+                  )}
+                </div>
               ) : (
                 <div className="device-screen">
                   <div className="layout-preview-empty">暂无预览</div>
                 </div>
               )}
             </div>
-
-            <section className="inspector">
-              <div className="section-title">
-                <Type size={16} />
-                微调面板
-              </div>
-              <label>
-                主题色
-                <input
-                  type="color"
-                  value={String(mergedPreset.palette.primary)}
-                  onChange={(event) => setThemeColor(event.target.value)}
-                />
-              </label>
-              <label>
-                正文字号
-                <select
-                  value={String(mergedPreset.typography.bodySize)}
-                  onChange={(event) => setBodySize(event.target.value)}
-                >
-                  <option value="14px">14px</option>
-                  <option value="15px">15px</option>
-                  <option value="16px">16px</option>
-                  <option value="17px">17px</option>
-                </select>
-              </label>
-              <label>
-                段间距
-                <select
-                  value={String(mergedPreset.rhythm.paragraphGap)}
-                  onChange={(event) => setParagraphGap(event.target.value)}
-                >
-                  <option value="14px">紧凑</option>
-                  <option value="16px">标准</option>
-                  <option value="20px">舒展</option>
-                  <option value="22px">留白</option>
-                </select>
-              </label>
-              <label>
-                文末引导语
-                <textarea
-                  rows={3}
-                  value={String(mergedPreset.decorations.footerText ?? "")}
-                  onChange={(event) => setFooterText(event.target.value)}
-                />
-              </label>
-              <div className="inspector-divider" />
-              <button className="panel-action" onClick={saveCurrentStyle}>
-                <Save size={16} />
-                存为我的版式
-              </button>
-            </section>
           </aside>
         </main>
       )}

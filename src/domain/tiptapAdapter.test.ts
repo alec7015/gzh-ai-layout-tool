@@ -74,6 +74,40 @@ describe("tiptapAdapter", () => {
     expect(JSON.stringify(doc)).not.toContain('"text":""');
   });
 
+  it("does not emit empty text nodes for blank quotes, list items, or table cells", () => {
+    const article: ArticleAst = {
+      meta: { title: "空节点" },
+      blocks: [
+        { id: "title-1", type: "title", text: "空节点", style: {} },
+        { id: "quote-empty", type: "quote", text: "", style: {} },
+        { id: "list-empty", type: "list", ordered: false, items: ["", "保留"], style: {} },
+        {
+          id: "table-empty",
+          type: "table",
+          rows: [
+            { cells: ["", "", ""], header: true },
+            { cells: ["", "内容", ""] },
+          ],
+          style: {},
+        },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(JSON.stringify(doc)).not.toContain('"text":""');
+    expect(restored.blocks[1]).toMatchObject({ type: "quote", text: "" });
+    expect(restored.blocks[2]).toMatchObject({ type: "list", items: ["保留"] });
+    expect(restored.blocks[3]).toMatchObject({
+      type: "table",
+      rows: [
+        { cells: ["", "", ""], header: true },
+        { cells: ["", "内容", ""] },
+      ],
+    });
+  });
+
   it("preserves block ids, block styles, and rich text attrs across round trips", () => {
     const article: ArticleAst = {
       meta: { title: "样式保留" },

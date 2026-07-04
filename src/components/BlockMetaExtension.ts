@@ -23,7 +23,20 @@ export const BlockMeta = Extension.create({
           },
           blockStyle: {
             default: null,
-            rendered: false,
+            parseHTML: () => null,
+            renderHTML: (attrs) => {
+              const blockStyle = attrs.blockStyle;
+              if (!blockStyle || typeof blockStyle !== "object" || Array.isArray(blockStyle)) {
+                return {};
+              }
+
+              const style = Object.entries(blockStyle as Record<string, unknown>)
+                .filter(([, value]) => typeof value === "string" || typeof value === "number")
+                .map(([key, value]) => `${key}:${value}`)
+                .join(";");
+
+              return style ? { style } : {};
+            },
           },
         },
       },

@@ -1,0 +1,146 @@
+export type BlockType =
+  | "title"
+  | "heading"
+  | "paragraph"
+  | "quote"
+  | "list"
+  | "image"
+  | "divider";
+
+export type TextMark = "bold" | "italic" | "emphasis";
+
+export type BlockOverride = Record<string, string | number | boolean | null>;
+
+export interface TextRun {
+  text: string;
+  marks?: TextMark[];
+}
+
+export interface BaseBlock {
+  id: string;
+  type: BlockType;
+  style?: BlockOverride;
+}
+
+export interface TitleBlock extends BaseBlock {
+  type: "title";
+  text: string;
+}
+
+export interface HeadingBlock extends BaseBlock {
+  type: "heading";
+  text: string;
+}
+
+export interface ParagraphBlock extends BaseBlock {
+  type: "paragraph";
+  runs: TextRun[];
+}
+
+export interface QuoteBlock extends BaseBlock {
+  type: "quote";
+  text: string;
+}
+
+export interface ListBlock extends BaseBlock {
+  type: "list";
+  ordered: boolean;
+  items: string[];
+}
+
+export interface ImageBlock extends BaseBlock {
+  type: "image";
+  src: string;
+  caption?: string;
+}
+
+export interface DividerBlock extends BaseBlock {
+  type: "divider";
+}
+
+export type ArticleBlock =
+  | TitleBlock
+  | HeadingBlock
+  | ParagraphBlock
+  | QuoteBlock
+  | ListBlock
+  | ImageBlock
+  | DividerBlock;
+
+export interface ArticleAst {
+  meta: {
+    title: string;
+    digest?: string;
+  };
+  blocks: ArticleBlock[];
+}
+
+export interface Palette {
+  primary: string;
+  secondary: string;
+  bg: string;
+  textMain: string;
+  textSub: string;
+  accent: string;
+}
+
+export interface Typography {
+  titleSize: string;
+  h2Size: string;
+  bodySize: string;
+  lineHeight: number;
+  letterSpacing: string;
+  firstLetterDrop: boolean;
+}
+
+export interface Rhythm {
+  paragraphGap: string;
+  sectionGap: string;
+  contentPadding: string;
+  align: "left" | "center";
+}
+
+export interface ComponentVariant {
+  variant: string;
+}
+
+export interface StylePreset {
+  id: string;
+  name: string;
+  moods: string[];
+  palette: Palette;
+  typography: Typography;
+  rhythm: Rhythm;
+  components: {
+    title: ComponentVariant;
+    heading: ComponentVariant;
+    quote: ComponentVariant;
+    list: ComponentVariant;
+    emphasis: ComponentVariant;
+    divider: ComponentVariant;
+    image: ComponentVariant;
+  };
+  decorations: {
+    header: string | null;
+    footer: string | null;
+    sectionOrnament: string | null;
+  };
+}
+
+export interface ArticleAnalysis {
+  genre: string;
+  tone: string;
+  hasList: boolean;
+  strongQuotes: number;
+  avgParaLen: number;
+  length: "短" | "中" | "长";
+  keywords: string[];
+}
+
+export type StyleOverrides = Record<string, string | number | boolean | null>;
+
+export interface LayoutRecommendation {
+  styleId: string;
+  reason: string;
+  overrides: StyleOverrides;
+}

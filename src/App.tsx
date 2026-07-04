@@ -7,13 +7,14 @@ import {
   Moon,
   Palette,
   Save,
+  Settings,
   Sparkles,
   Smartphone,
   Tablet,
   Type,
 } from "lucide-react";
 import { recommendLayout } from "./domain/aiLayout";
-import { callChatCompletionsJson } from "./domain/aiClient";
+import { callChatCompletionsJson, isTauriRuntime } from "./domain/aiClient";
 import { buildLayoutRequest, coerceLayoutRecommendation } from "./domain/aiLayoutSchema";
 import {
   buildWritingRequest,
@@ -91,6 +92,8 @@ export default function App() {
   const [feedback, setFeedback] = useState<Feedback>(() =>
     createFeedback("info", "准备就绪，可以开始写作或排版。")
   );
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLayouting, setIsLayouting] = useState(false);
 
   const allStylePresets = useMemo(() => [...stylePresets, ...customStyles], [customStyles]);
   const currentDraft = useMemo(() => getCurrentDraft(draftLibrary), [draftLibrary]);
@@ -175,19 +178,41 @@ export default function App() {
     setWorkspace("layout");
   }
 
+  function describeAiFallback(aiSucceeded: boolean, kind: "写作" | "排版"): string {
+    if (aiSucceeded) {
+      return kind === "写作" ? "已根据模型生成草稿。" : "已根据模型建议完成排版。";
+    }
+    if (!aiSettings.apiKey.trim()) {
+      return `未填写 API Key，已用本地规则${kind}。可在上方「模型设置」填入密钥。`;
+    }
+    if (!isTauriRuntime()) {
+      return `网页预览无法直连模型（浏览器 CORS 限制），已用本地规则${kind}。请用桌面版体验真实 AI。`;
+    }
+    return `模型调用失败，已用本地规则${kind}。请检查接口地址、模型名与账户额度。`;
+  }
+
   async function generateArticle() {
-    const aiArticle = await callChatCompletionsJson<ArticleAst>(
-      aiSettings,
-      buildWritingRequest({ topic: writingTopic, style: writingStyle, words: 900 })
-    );
-    const nextArticle = aiArticle ?? generateDraftLocally(writingTopic, writingStyle);
-    setArticle(nextArticle);
-    setDraftText(astToPlainText(nextArticle));
-    setEditorVersion((version) => version + 1);
+    if (isGenerating) {
+      return;
+    }
+    setIsGenerating(true);
     setWorkspace("writer");
-    setFeedback(
-      createFeedback(aiArticle ? "success" : "info", aiArticle ? "已生成 AI 草稿。" : "未调用模型，已使用本地生成。")
-    );
+    setFeedback(createFeedback("info", "正在生成草稿…"));
+    try {
+      const aiArticle = await callChatCompletionsJson<ArticleAst>(
+        aiSettings,
+        buildWritingRequest({ topic: writingTopic, style: writingStyle, words: 900 })
+      );
+      const nextArticle = aiArticle ?? generateDraftLocally(writingTopic, writingStyle);
+      setArticle(nextArticle);
+      setDraftText(astToPlainText(nextArticle));
+      setEditorVersion((version) => version + 1);
+      setFeedback(
+        createFeedback(aiArticle ? "success" : "info", describeAiFallback(Boolean(aiArticle), "写作"))
+      );
+    } finally {
+      setIsGenerating(false);
+    }
   }
 
   function rewriteDraft(mode: RewriteMode) {
@@ -239,19 +264,27 @@ export default function App() {
   }
 
   async function runSmartLayout() {
-    const aiRecommendation = await callChatCompletionsJson<unknown>(
-      aiSettings,
-      buildLayoutRequest(article)
-    );
-    const next = coerceLayoutRecommendation(aiRecommendation) ?? recommendLayout(article);
-    setRecommendation(next);
-    setSelectedStyleId(next.styleId);
-    setFeedback(
-      createFeedback(
-        aiRecommendation ? "success" : "info",
-        aiRecommendation ? "已根据模型建议完成排版。" : "已使用本地规则完成智能排版。"
-      )
-    );
+    if (isLayouting) {
+      return;
+    }
+    setIsLayouting(true);
+    setWorkspace("layout"); // 立即跳到排版台，让智能排版结果可见
+    setFeedback(createFeedback("info", "正在智能排版…"));
+    try {
+      const aiRecommendation = await callChatCompletionsJson<unknown>(
+        aiSettings,
+        buildLayoutRequest(article)
+      );
+      const coerced = coerceLayoutRecommendation(aiRecommendation);
+      const next = coerced ?? recommendLayout(article);
+      setRecommendation(next);
+      setSelectedStyleId(next.styleId);
+      setFeedback(
+        createFeedback(coerced ? "success" : "info", describeAiFallback(Boolean(coerced), "排版"))
+      );
+    } finally {
+      setIsLayouting(false);
+    }
   }
 
   async function copyHtml() {
@@ -305,9 +338,17 @@ export default function App() {
               排版台
             </button>
           </nav>
-          <button className="ghost-button" onClick={() => void runSmartLayout()}>
+          <button className="ghost-button" onClick={() => setWorkspace("writer")}>
+            <Settings size={16} />
+            模型设置
+          </button>
+          <button
+            className="ghost-button"
+            onClick={() => void runSmartLayout()}
+            disabled={isLayouting}
+          >
             <Sparkles size={16} />
-            AI 智能排版
+            {isLayouting ? "排版中…" : "AI 智能排版"}
           </button>
           <button className="primary-button" onClick={copyHtml}>
             {copied ? <Check size={16} /> : <Clipboard size={16} />}
@@ -322,6 +363,35 @@ export default function App() {
       {workspace === "writer" ? (
         <main className="writer-screen">
           <aside className="writer-panel">
+            <section className="model-settings-section">
+              <h2>模型设置</h2>
+              <p className="model-settings-hint">
+                桌面版可直连模型；网页预览受浏览器 CORS 限制，AI 会自动回退为本地规则。
+              </p>
+              <label className="writer-field">
+                接口地址
+                <input
+                  value={aiSettings.baseUrl}
+                  onChange={(event) => updateAiSettings({ baseUrl: event.target.value })}
+                />
+              </label>
+              <label className="writer-field">
+                模型
+                <input
+                  value={aiSettings.model}
+                  onChange={(event) => updateAiSettings({ model: event.target.value })}
+                />
+              </label>
+              <label className="writer-field">
+                API Key
+                <input
+                  type="password"
+                  placeholder={maskApiKey(aiSettings.apiKey)}
+                  value={aiSettings.apiKey}
+                  onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
+                />
+              </label>
+            </section>
             <section>
               <h2>草稿列表</h2>
               <div className="draft-list">
@@ -363,9 +433,13 @@ export default function App() {
                   <option value="轻松友好">轻松友好</option>
                 </select>
               </label>
-              <button className="panel-action" onClick={() => void generateArticle()}>
+              <button
+                className="panel-action"
+                onClick={() => void generateArticle()}
+                disabled={isGenerating}
+              >
                 <Sparkles size={16} />
-                生成一篇干净稿
+                {isGenerating ? "生成中…" : "生成一篇干净稿"}
               </button>
             </section>
             <section>
@@ -376,32 +450,6 @@ export default function App() {
                 <button onClick={() => rewriteDraft("精简")}>精简</button>
                 <button onClick={applyTitleSuggestion}>起标题</button>
               </div>
-            </section>
-            <section>
-              <h2>模型设置</h2>
-              <label className="writer-field">
-                接口地址
-                <input
-                  value={aiSettings.baseUrl}
-                  onChange={(event) => updateAiSettings({ baseUrl: event.target.value })}
-                />
-              </label>
-              <label className="writer-field">
-                模型
-                <input
-                  value={aiSettings.model}
-                  onChange={(event) => updateAiSettings({ model: event.target.value })}
-                />
-              </label>
-              <label className="writer-field">
-                API Key
-                <input
-                  type="password"
-                  placeholder={maskApiKey(aiSettings.apiKey)}
-                  value={aiSettings.apiKey}
-                  onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
-                />
-              </label>
             </section>
           </aside>
           <section className="writing-area">

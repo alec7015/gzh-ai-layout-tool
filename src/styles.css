@@ -838,3 +838,24 @@ button {
     padding: 28px 22px;
   }
 }
+
+/* 模型设置置顶区块：醒目提示"先配置" */
+.model-settings-section {
+  padding: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.25);
+  border-radius: 12px;
+  background: rgba(15, 118, 110, 0.05);
+}
+
+.model-settings-hint {
+  margin: 0 0 12px !important;
+  color: #0f766e !important;
+  font-size: 12px !important;
+}
+
+/* AI 按钮加载/禁用态 */
+.panel-action:disabled,
+.ghost-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}

@@ -1,4 +1,4 @@
-import { astToPlainText } from "./draftStore";
+import { astToMarkdown } from "./draftStore";
 import { stylePresets } from "./stylePresets";
 import type { ChatCompletionRequest } from "./aiWriting";
 import type { ArticleAst, LayoutRecommendation, StyleOverrides } from "./types";
@@ -30,7 +30,7 @@ export function buildLayoutRequest(article: ArticleAst): ChatCompletionRequest {
       },
       {
         role: "user",
-        content: `请根据文章调性选择最适合的版式。\n可选 styleId：${Array.from(allowedStyleIds).join(", ")}\n返回示例：{"styleId":"listicle_cards","reason":"...","overrides":{"palette.primary":"#2B6CB0"}}\n文章：\n${astToPlainText(article)}`,
+        content: `请根据文章调性选择最适合的版式。\n可选 styleId：${Array.from(allowedStyleIds).join(", ")}\n返回示例：{"styleId":"listicle_cards","reason":"...","overrides":{"palette.primary":"#2B6CB0"}}\n文章：\n${astToMarkdown(article)}`,
       },
     ],
   };

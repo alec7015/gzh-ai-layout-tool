@@ -7,6 +7,10 @@ export interface DraftStorage {
   setItem(key: string, value: string): unknown;
 }
 
+export interface MarkdownParseOptions {
+  strictHeadings?: boolean;
+}
+
 export function createSampleArticle(): ArticleAst {
   return {
     meta: {
@@ -50,7 +54,7 @@ export function plainTextToAst(input: string): ArticleAst {
   return markdownToAst(input);
 }
 
-export function markdownToAst(input: string): ArticleAst {
+export function markdownToAst(input: string, options: MarkdownParseOptions = {}): ArticleAst {
   const lines = input
     .split(/\r?\n/)
     .map((line) => line.trim());
@@ -120,7 +124,7 @@ export function markdownToAst(input: string): ArticleAst {
       continue;
     }
 
-    if (line.startsWith("#") || isHeadingLine(line, index)) {
+    if (line.startsWith("#") || (!options.strictHeadings && isHeadingLine(line, index))) {
       blocks.push({ id: createBlockId("heading", index), type: "heading", text: stripHeadingMarker(line), style: {} });
       continue;
     }
@@ -165,6 +169,36 @@ export function astToPlainText(article: ArticleAst): string {
       }
     })
     .join("\n\n");
+}
+
+export function astToMarkdown(article: ArticleAst): string {
+  return article.blocks
+    .map((block, blockIndex) => {
+      switch (block.type) {
+        case "title":
+          return `# ${block.text}`;
+        case "heading":
+          return `## ${block.text}`;
+        case "paragraph":
+          return runsToMarkdown(block.runs);
+        case "quote":
+          return `> ${block.text}`;
+        case "list":
+          return block.items
+            .map((item, index) => `${block.ordered ? `${index + 1}.` : "-"} ${item}`)
+            .join("\n");
+        case "image":
+          return `![${block.caption ?? "配图"}](${block.src})`;
+        case "imageGrid":
+          return block.images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+        case "table":
+          return tableToMarkdown(block.rows);
+        case "divider":
+          return blockIndex === 0 ? "---" : "\n---";
+      }
+    })
+    .join("\n\n")
+    .trim();
 }
 
 export function loadDraft(storage: DraftStorage | undefined): ArticleAst {
@@ -239,6 +273,29 @@ function parseRuns(line: string): TextRun[] {
   }
 
   return runs.length > 0 ? runs : [{ text: line }];
+}
+
+function runsToMarkdown(runs: TextRun[]): string {
+  return runs.map(runToMarkdown).join("");
+}
+
+function runToMarkdown(run: TextRun): string {
+  const escaped = escapeMarkdownInline(run.text);
+  const marks = run.marks ?? [];
+
+  if (marks.includes("bold")) {
+    return `**${escaped}**`;
+  }
+
+  if (marks.includes("italic") || marks.includes("emphasis")) {
+    return `*${escaped}*`;
+  }
+
+  return escaped;
+}
+
+function escapeMarkdownInline(text: string): string {
+  return text.replace(/([\\`])/g, "\\$1");
 }
 
 function isTableStart(lines: string[], index: number): boolean {

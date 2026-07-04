@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { callChatCompletionsJson, safeJsonParse } from "./aiClient";
+import {
+  callChatCompletionsJson,
+  callChatCompletionsText,
+  safeJsonParse,
+  type AiResult,
+} from "./aiClient";
 import { createDefaultAiSettings } from "./aiSettings";
 import { buildWritingRequest } from "./aiWriting";
 
@@ -29,7 +34,7 @@ describe("aiClient", () => {
       fetchMock
     );
 
-    expect(result).toEqual({ title: "测试" });
+    expect(result).toEqual({ ok: true, data: { title: "测试" }, rawText: '{"title":"测试"}' });
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.com/v1/chat/completions",
       expect.objectContaining({
@@ -46,6 +51,117 @@ describe("aiClient", () => {
       vi.fn()
     );
 
-    expect(result).toBeNull();
+    expect(result).toMatchObject({ ok: false, code: "missing-key" });
+  });
+
+  it("maps browser fetch failures to a CORS error", async () => {
+    const result = await callChatCompletionsText(
+      {
+        ...createDefaultAiSettings(),
+        apiKey: "secret",
+      },
+      buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+      vi.fn().mockRejectedValue(new TypeError("Failed to fetch"))
+    );
+
+    expect(result).toMatchObject({ ok: false, code: "cors" });
+  });
+
+  it("maps http failures with status and provider message", async () => {
+    const result = await callChatCompletionsText(
+      {
+        ...createDefaultAiSettings(),
+        apiKey: "secret",
+      },
+      buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => JSON.stringify({ error: { message: "invalid key" } }),
+      })
+    );
+
+    expect(result).toMatchObject({ ok: false, code: "http", status: 401 });
+    expect((result as Extract<AiResult<string>, { ok: false }>).message).toContain("invalid key");
+  });
+
+  it("retries once without response_format when a provider rejects it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => "response_format is not supported",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "重试成功" } }] }),
+      });
+
+    const result = await callChatCompletionsText(
+      {
+        ...createDefaultAiSettings(),
+        apiKey: "secret",
+      },
+      {
+        ...buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+        response_format: { type: "json_object" },
+      },
+      fetchMock
+    );
+
+    expect(result).toEqual({ ok: true, data: "重试成功", rawText: "重试成功" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).not.toHaveProperty("response_format");
+  });
+
+  it("parses streamed SSE chat completion chunks", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"你"}}]}\n\n'));
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"好"}}]}\n\n'));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    const onDelta = vi.fn();
+
+    const result = await callChatCompletionsText(
+      {
+        ...createDefaultAiSettings(),
+        apiKey: "secret",
+      },
+      {
+        ...buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+        stream: true,
+      },
+      vi.fn().mockResolvedValue({ ok: true, body: stream }),
+      { onDelta }
+    );
+
+    expect(result).toEqual({ ok: true, data: "你好", rawText: "你好" });
+    expect(onDelta).toHaveBeenCalledWith("你");
+    expect(onDelta).toHaveBeenCalledWith("好");
+  });
+
+  it("omits temperature for Kimi K2.6 requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "ok" } }] }),
+    });
+
+    await callChatCompletionsText(
+      {
+        ...createDefaultAiSettings(),
+        provider: "kimi",
+        model: "kimi-k2.6",
+        apiKey: "secret",
+      },
+      buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+      fetchMock
+    );
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty("temperature");
   });
 });

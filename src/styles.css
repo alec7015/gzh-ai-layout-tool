@@ -48,6 +48,7 @@ button {
   height: 32px;
   display: flex;
   align-items: center;
+  gap: 10px;
   padding: 0 22px;
   border-bottom: 1px solid #e3e7eb;
   color: #58636f;
@@ -63,6 +64,16 @@ button {
 .feedback-bar.error {
   color: #b42318;
   background: #fff1f0;
+}
+
+.feedback-action {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
+  color: inherit;
+  font-size: 12px;
 }
 
 .brand {
@@ -529,14 +540,20 @@ button {
 }
 
 .writer-field input,
-.writer-field select {
+.writer-field select,
+.writer-field textarea {
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  min-height: 34px;
+  padding: 7px 10px;
   border: 1px solid #dfe5ea;
   border-radius: 7px;
   background: #ffffff;
   color: #25313d;
+}
+
+.writer-field textarea {
+  min-height: 76px;
+  resize: vertical;
 }
 
 .panel-action {
@@ -839,23 +856,103 @@ button {
   }
 }
 
-/* 模型设置置顶区块：醒目提示"先配置" */
-.model-settings-section {
-  padding: 14px;
-  border: 1px solid rgba(15, 118, 110, 0.25);
-  border-radius: 12px;
-  background: rgba(15, 118, 110, 0.05);
-}
-
-.model-settings-hint {
-  margin: 0 0 12px !important;
-  color: #0f766e !important;
-  font-size: 12px !important;
-}
-
 /* AI 按钮加载/禁用态 */
 .panel-action:disabled,
 .ghost-button:disabled {
   opacity: 0.6;
   cursor: progress;
+}
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.settings-modal {
+  width: min(620px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+}
+
+.settings-modal-header,
+.settings-modal-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-modal-header h2 {
+  margin: 0 0 6px;
+}
+
+.settings-modal-header p,
+.settings-modal-footer span {
+  margin: 0;
+  color: #687581;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.settings-modal .writer-field {
+  font-size: 13px;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 7px;
+  background: #ffffff;
+  color: #47525f;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.provider-chip {
+  justify-content: center;
+  min-height: 34px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #25313d;
+}
+
+.provider-chip.active {
+  border-color: rgba(31, 122, 95, 0.42);
+  background: #edf8f3;
+  color: #147351;
+}
+
+.settings-modal-footer {
+  align-items: center;
+  margin-top: 18px;
+}
+
+@media (max-width: 640px) {
+  .settings-backdrop {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .provider-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

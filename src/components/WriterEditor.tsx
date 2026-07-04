@@ -18,6 +18,7 @@ interface WriterEditorProps {
   onChangeArticle(article: ArticleAst): void;
   onInsertImageFiles(files: FileList | File[]): void;
   isSupportedImageFile(file: File): boolean;
+  onCopyToLayout?: () => void;
 }
 
 export default function WriterEditor({
@@ -26,6 +27,7 @@ export default function WriterEditor({
   onChangeArticle,
   onInsertImageFiles,
   isSupportedImageFile,
+  onCopyToLayout,
 }: WriterEditorProps) {
   const articleRef = useRef(article);
   const editor = useEditor(
@@ -110,6 +112,11 @@ export default function WriterEditor({
         <button type="button" onClick={insertImageGrid}>
           插入多图
         </button>
+        {onCopyToLayout ? (
+          <button type="button" onClick={onCopyToLayout}>
+            复制到排版台
+          </button>
+        ) : null}
       </div>
       <EditorContent editor={editor} />
     </div>

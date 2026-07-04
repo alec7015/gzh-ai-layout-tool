@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Clipboard,
@@ -13,24 +13,32 @@ import {
   Tablet,
   Type,
 } from "lucide-react";
+import { SettingsModal } from "./components/SettingsModal";
 import { recommendLayout } from "./domain/aiLayout";
-import { callChatCompletionsJson, isTauriRuntime } from "./domain/aiClient";
+import { callChatCompletionsJson, callChatCompletionsText } from "./domain/aiClient";
 import { buildLayoutRequest, coerceLayoutRecommendation } from "./domain/aiLayoutSchema";
 import {
+  buildRewriteRequest,
+  buildSmartFormatRequest,
+  buildTitleRequest,
   buildWritingRequest,
+  coerceMarkdownArticle,
   generateDraftLocally,
+  protectArticleImagesForAi,
   rewriteSelectionLocally,
+  restoreProtectedImages,
   suggestTitles,
   type RewriteMode,
 } from "./domain/aiWriting";
 import {
   loadAiSettings,
-  maskApiKey,
   saveAiSettings,
+  normalizeAiSettings,
   type AiSettings,
 } from "./domain/aiSettings";
 import { createCustomStyle, loadCustomStyles, saveCustomStyles } from "./domain/customStyles";
 import {
+  astToMarkdown,
   astToPlainText,
   createSampleArticle,
   plainTextToAst,
@@ -62,6 +70,7 @@ import { renderWechatHtml } from "./domain/wechatRenderer";
 
 type Workspace = "writer" | "layout";
 type PreviewDevice = "phone" | "tablet" | "desktop";
+type BusyState = null | "writing" | "format" | "layout" | "rewrite";
 
 const storage = typeof window === "undefined" ? undefined : window.localStorage;
 const WriterEditor = lazy(() => import("./components/WriterEditor"));
@@ -83,7 +92,13 @@ export default function App() {
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("phone");
   const [writingTopic, setWritingTopic] = useState("早起习惯");
   const [writingStyle, setWritingStyle] = useState("清晰实用");
+  const [writingWords, setWritingWords] = useState(1000);
+  const [writingGenre, setWritingGenre] = useState("干货教程");
+  const [writingOutline, setWritingOutline] = useState("");
   const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings(storage));
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTesting, setSettingsTesting] = useState(false);
+  const [settingsTestMessage, setSettingsTestMessage] = useState("可先测试连接，再开始写作。");
   const [customStyles, setCustomStyles] = useState(() => loadCustomStyles(storage));
   const [selectedBlockId, setSelectedBlockId] = useState(
     () => getCurrentDraft(loadDraftLibrary(storage)).article.blocks[1]?.id ?? ""
@@ -92,8 +107,8 @@ export default function App() {
   const [feedback, setFeedback] = useState<Feedback>(() =>
     createFeedback("info", "准备就绪，可以开始写作或排版。")
   );
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isLayouting, setIsLayouting] = useState(false);
+  const [busy, setBusy] = useState<BusyState>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const allStylePresets = useMemo(() => [...stylePresets, ...customStyles], [customStyles]);
   const currentDraft = useMemo(() => getCurrentDraft(draftLibrary), [draftLibrary]);
@@ -173,64 +188,188 @@ export default function App() {
     setFeedback(createFeedback("success", "已恢复历史版本。"));
   }
 
-  function enterLayout() {
+  function copyToLayout() {
     setDraftLibrary((current) => createVersionSnapshot(updateCurrentDraftArticle(current, article), "去排版"));
     setWorkspace("layout");
   }
 
-  function describeAiFallback(aiSucceeded: boolean, kind: "写作" | "排版"): string {
-    if (aiSucceeded) {
-      return kind === "写作" ? "已根据模型生成草稿。" : "已根据模型建议完成排版。";
-    }
-    if (!aiSettings.apiKey.trim()) {
-      return `未填写 API Key，已用本地规则${kind}。可在上方「模型设置」填入密钥。`;
-    }
-    if (!isTauriRuntime()) {
-      return `网页预览无法直连模型（浏览器 CORS 限制），已用本地规则${kind}。请用桌面版体验真实 AI。`;
-    }
-    return `模型调用失败，已用本地规则${kind}。请检查接口地址、模型名与账户额度。`;
+  function stopAiTask() {
+    abortControllerRef.current?.abort();
   }
 
   async function generateArticle() {
-    if (isGenerating) {
+    if (busy) {
       return;
     }
-    setIsGenerating(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    setBusy("writing");
     setWorkspace("writer");
+    saveCurrentVersion("AI 生成前快照");
     setFeedback(createFeedback("info", "正在生成草稿…"));
     try {
-      const aiArticle = await callChatCompletionsJson<ArticleAst>(
+      const result = await callChatCompletionsText(
         aiSettings,
-        buildWritingRequest({ topic: writingTopic, style: writingStyle, words: 900 })
+        {
+          ...buildWritingRequest({
+            topic: writingTopic,
+            style: writingStyle,
+            words: writingWords,
+            genre: writingGenre,
+            outline: writingOutline,
+          }),
+          stream: true,
+        },
+        undefined,
+        { signal: controller.signal }
       );
-      const nextArticle = aiArticle ?? generateDraftLocally(writingTopic, writingStyle);
-      setArticle(nextArticle);
-      setDraftText(astToPlainText(nextArticle));
-      setEditorVersion((version) => version + 1);
-      setFeedback(
-        createFeedback(aiArticle ? "success" : "info", describeAiFallback(Boolean(aiArticle), "写作"))
-      );
+      if (!result.ok) {
+        if (result.code === "aborted") {
+          setFeedback(createFeedback("info", result.message));
+          return;
+        }
+        const fallback = generateDraftLocally(writingTopic, writingStyle);
+        openArticle(fallback);
+        setFeedback(createFeedback("info", `${result.message} 已用本地规则生成草稿。`));
+        return;
+      }
+
+      const aiArticle = coerceMarkdownArticle(result.data);
+      if (!aiArticle) {
+        const fallback = generateDraftLocally(writingTopic, writingStyle);
+        openArticle(fallback);
+        setFeedback(createFeedback("info", "模型返回结构不可用，已用本地规则生成草稿。"));
+        return;
+      }
+
+      openArticle(aiArticle);
+      setFeedback(createFeedback("success", "已根据模型生成草稿。"));
     } finally {
-      setIsGenerating(false);
+      abortControllerRef.current = null;
+      setBusy(null);
     }
   }
 
-  function rewriteDraft(mode: RewriteMode) {
-    const rewritten = rewriteSelectionLocally(draftText, mode);
-    handleDraftChange(rewritten);
-    setEditorVersion((version) => version + 1);
+  async function runWriterSmartFormat() {
+    if (busy) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const protectedArticle = protectArticleImagesForAi(article);
+    abortControllerRef.current = controller;
+    setBusy("format");
+    saveCurrentVersion("AI 智能排版前快照");
+    setFeedback(createFeedback("info", "正在结构化排版…"));
+    try {
+      const result = await callChatCompletionsText(
+        aiSettings,
+        buildSmartFormatRequest(protectedArticle.markdown),
+        undefined,
+        { signal: controller.signal }
+      );
+      if (!result.ok) {
+        setFeedback(createFeedback(result.code === "aborted" ? "info" : "error", result.message));
+        return;
+      }
+
+      const aiArticle = coerceMarkdownArticle(result.data, { allowPlaceholders: true });
+      if (!aiArticle) {
+        setFeedback(createFeedback("error", "模型返回结构不可用，未修改当前草稿。"));
+        return;
+      }
+
+      openArticle(restoreProtectedImages(aiArticle, protectedArticle.protectedBlocks));
+      setFeedback(createFeedback("success", "已完成结构化排版，可在版本历史回滚。"));
+    } finally {
+      abortControllerRef.current = null;
+      setBusy(null);
+    }
   }
 
-  function applyTitleSuggestion() {
-    const nextTitle = suggestTitles(article.meta.title || writingTopic, draftText)[0];
-    const lines = draftText.split(/\r?\n/);
-    lines[0] = nextTitle;
-    handleDraftChange(lines.join("\n"));
-    setEditorVersion((version) => version + 1);
+  async function rewriteDraft(mode: RewriteMode) {
+    if (busy) {
+      return;
+    }
+
+    const protectedArticle = protectArticleImagesForAi(article);
+    setBusy("rewrite");
+    saveCurrentVersion(`AI ${mode}前快照`);
+    setFeedback(createFeedback("info", `正在${mode}…`));
+    try {
+      const result = await callChatCompletionsText(aiSettings, buildRewriteRequest(mode, protectedArticle.markdown));
+      if (!result.ok) {
+        const rewritten = rewriteSelectionLocally(draftText, mode);
+        handleDraftChange(rewritten);
+        setEditorVersion((version) => version + 1);
+        setFeedback(createFeedback("info", `${result.message} 已用本地规则${mode}。`));
+        return;
+      }
+
+      const aiArticle = coerceMarkdownArticle(result.data, { allowPlaceholders: true });
+      if (!aiArticle) {
+        setFeedback(createFeedback("error", "模型返回结构不可用，未修改当前草稿。"));
+        return;
+      }
+
+      openArticle(restoreProtectedImages(aiArticle, protectedArticle.protectedBlocks));
+      setFeedback(createFeedback("success", `已完成 AI ${mode}。`));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function applyTitleSuggestion() {
+    if (busy) {
+      return;
+    }
+
+    setBusy("rewrite");
+    saveCurrentVersion("AI 起标题前快照");
+    setFeedback(createFeedback("info", "正在起标题…"));
+    try {
+      const result = await callChatCompletionsText(aiSettings, buildTitleRequest(astToMarkdown(article)));
+      const nextTitle = result.ok ? parseFirstTitle(result.data) : suggestTitles(article.meta.title || writingTopic, draftText)[0];
+      setArticle((current) => updateArticleTitle(current, nextTitle));
+      setDraftText((current) => {
+        const lines = current.split(/\r?\n/);
+        lines[0] = nextTitle;
+        return lines.join("\n");
+      });
+      setEditorVersion((version) => version + 1);
+      setFeedback(
+        createFeedback(result.ok ? "success" : "info", result.ok ? "已生成标题。" : `${result.message} 已用本地规则起标题。`)
+      );
+    } finally {
+      setBusy(null);
+    }
   }
 
   function updateAiSettings(next: Partial<AiSettings>) {
-    setAiSettings((current) => ({ ...current, ...next }));
+    setAiSettings((current) => normalizeAiSettings({ ...current, ...next }));
+  }
+
+  async function testModelConnection() {
+    if (settingsTesting) {
+      return;
+    }
+
+    setSettingsTesting(true);
+    setSettingsTestMessage("正在测试连接…");
+    try {
+      const result = await callChatCompletionsText(aiSettings, {
+        model: "openai-compatible-chat-model",
+        temperature: 0,
+        max_tokens: 64,
+        messages: [
+          { role: "system", content: "只回复 ok。" },
+          { role: "user", content: "请回复 ok" },
+        ],
+      });
+      setSettingsTestMessage(result.ok ? "连接成功。" : result.message);
+    } finally {
+      setSettingsTesting(false);
+    }
   }
 
   async function insertImageFiles(files: FileList | File[]) {
@@ -264,26 +403,29 @@ export default function App() {
   }
 
   async function runSmartLayout() {
-    if (isLayouting) {
+    if (busy) {
       return;
     }
-    setIsLayouting(true);
-    setWorkspace("layout"); // 立即跳到排版台，让智能排版结果可见
-    setFeedback(createFeedback("info", "正在智能排版…"));
+    setBusy("layout");
+    setFeedback(createFeedback("info", "正在分析版式…"));
     try {
-      const aiRecommendation = await callChatCompletionsJson<unknown>(
+      const result = await callChatCompletionsJson<unknown>(
         aiSettings,
         buildLayoutRequest(article)
       );
-      const coerced = coerceLayoutRecommendation(aiRecommendation);
+      const coerced = result.ok ? coerceLayoutRecommendation(result.data) : null;
       const next = coerced ?? recommendLayout(article);
       setRecommendation(next);
       setSelectedStyleId(next.styleId);
-      setFeedback(
-        createFeedback(coerced ? "success" : "info", describeAiFallback(Boolean(coerced), "排版"))
-      );
+      if (coerced) {
+        setFeedback(createFeedback("success", "已根据模型建议完成版式推荐。"));
+      } else if (result.ok) {
+        setFeedback(createFeedback("info", "模型返回版式不可用，已使用本地规则推荐。"));
+      } else {
+        setFeedback(createFeedback("info", `${result.message} 已使用本地规则推荐版式。`));
+      }
     } finally {
-      setIsLayouting(false);
+      setBusy(null);
     }
   }
 
@@ -333,22 +475,22 @@ export default function App() {
             </button>
             <button
               className={workspace === "layout" ? "tab active" : "tab"}
-              onClick={enterLayout}
+              onClick={copyToLayout}
             >
               排版台
             </button>
           </nav>
-          <button className="ghost-button" onClick={() => setWorkspace("writer")}>
+          <button className="ghost-button" onClick={() => setSettingsOpen(true)}>
             <Settings size={16} />
             模型设置
           </button>
           <button
             className="ghost-button"
-            onClick={() => void runSmartLayout()}
-            disabled={isLayouting}
+            onClick={() => void (workspace === "writer" ? runWriterSmartFormat() : runSmartLayout())}
+            disabled={busy !== null}
           >
             <Sparkles size={16} />
-            {isLayouting ? "排版中…" : "AI 智能排版"}
+            {busy === "format" || busy === "layout" ? (workspace === "writer" ? "排版中…" : "分析中…") : "AI 智能排版"}
           </button>
           <button className="primary-button" onClick={copyHtml}>
             {copied ? <Check size={16} /> : <Clipboard size={16} />}
@@ -358,40 +500,26 @@ export default function App() {
       </header>
       <div className={`feedback-bar copy-status ${feedback.tone}`} role="status">
         {feedback.message}
+        {busy ? (
+          <button className="feedback-action" onClick={stopAiTask} type="button">
+            停止生成
+          </button>
+        ) : null}
       </div>
+      {settingsOpen ? (
+        <SettingsModal
+          settings={aiSettings}
+          testing={settingsTesting}
+          testMessage={settingsTestMessage}
+          onChange={(next) => updateAiSettings(next)}
+          onClose={() => setSettingsOpen(false)}
+          onTest={() => void testModelConnection()}
+        />
+      ) : null}
 
       {workspace === "writer" ? (
         <main className="writer-screen">
           <aside className="writer-panel">
-            <section className="model-settings-section">
-              <h2>模型设置</h2>
-              <p className="model-settings-hint">
-                桌面版可直连模型；网页预览受浏览器 CORS 限制，AI 会自动回退为本地规则。
-              </p>
-              <label className="writer-field">
-                接口地址
-                <input
-                  value={aiSettings.baseUrl}
-                  onChange={(event) => updateAiSettings({ baseUrl: event.target.value })}
-                />
-              </label>
-              <label className="writer-field">
-                模型
-                <input
-                  value={aiSettings.model}
-                  onChange={(event) => updateAiSettings({ model: event.target.value })}
-                />
-              </label>
-              <label className="writer-field">
-                API Key
-                <input
-                  type="password"
-                  placeholder={maskApiKey(aiSettings.apiKey)}
-                  value={aiSettings.apiKey}
-                  onChange={(event) => updateAiSettings({ apiKey: event.target.value })}
-                />
-              </label>
-            </section>
             <section>
               <h2>草稿列表</h2>
               <div className="draft-list">
@@ -413,7 +541,7 @@ export default function App() {
             </section>
             <section>
               <h2>AI 写作</h2>
-              <p>输入主题或大纲后，先用本地规则生成纯内容 AST；接口配置会保存在本机。</p>
+              <p>输入主题和要点后生成 Markdown 草稿；模型配置在顶栏「模型设置」。</p>
               <label className="writer-field">
                 主题
                 <input
@@ -433,22 +561,55 @@ export default function App() {
                   <option value="轻松友好">轻松友好</option>
                 </select>
               </label>
+              <label className="writer-field">
+                目标字数
+                <select
+                  value={writingWords}
+                  onChange={(event) => setWritingWords(Number(event.target.value))}
+                >
+                  <option value={600}>600</option>
+                  <option value={1000}>1000</option>
+                  <option value={1500}>1500</option>
+                  <option value={2500}>2500</option>
+                </select>
+              </label>
+              <label className="writer-field">
+                文体
+                <select
+                  value={writingGenre}
+                  onChange={(event) => setWritingGenre(event.target.value)}
+                >
+                  <option value="清单体">清单体</option>
+                  <option value="观点文">观点文</option>
+                  <option value="干货教程">干货教程</option>
+                  <option value="故事叙述">故事叙述</option>
+                  <option value="资讯速览">资讯速览</option>
+                </select>
+              </label>
+              <label className="writer-field">
+                要点/大纲
+                <textarea
+                  rows={3}
+                  value={writingOutline}
+                  onChange={(event) => setWritingOutline(event.target.value)}
+                />
+              </label>
               <button
                 className="panel-action"
                 onClick={() => void generateArticle()}
-                disabled={isGenerating}
+                disabled={busy !== null}
               >
                 <Sparkles size={16} />
-                {isGenerating ? "生成中…" : "生成一篇干净稿"}
+                {busy === "writing" ? "生成中…" : "生成一篇干净稿"}
               </button>
             </section>
             <section>
               <h2>内容操作</h2>
               <div className="action-list">
-                <button onClick={() => rewriteDraft("润色")}>润色</button>
-                <button onClick={() => rewriteDraft("扩写")}>扩写</button>
-                <button onClick={() => rewriteDraft("精简")}>精简</button>
-                <button onClick={applyTitleSuggestion}>起标题</button>
+                <button disabled={busy !== null} onClick={() => void rewriteDraft("润色")}>润色</button>
+                <button disabled={busy !== null} onClick={() => void rewriteDraft("扩写")}>扩写</button>
+                <button disabled={busy !== null} onClick={() => void rewriteDraft("精简")}>精简</button>
+                <button disabled={busy !== null} onClick={() => void applyTitleSuggestion()}>起标题</button>
               </div>
             </section>
           </aside>
@@ -460,14 +621,19 @@ export default function App() {
                 onChangeArticle={handleArticleChange}
                 onInsertImageFiles={(files) => void insertImageFiles(files)}
                 isSupportedImageFile={isSupportedImageFile}
+                onCopyToLayout={copyToLayout}
               />
             </Suspense>
           </section>
           <aside className="writer-meta">
             <h2>内容 AST</h2>
             <p>写作台只保留标题、正文、金句、列表等结构，不带任何视觉样式。</p>
-            <button className="primary-button" onClick={enterLayout}>
-              去排版
+            <button className="panel-action" disabled={busy !== null} onClick={() => void runWriterSmartFormat()}>
+              <Sparkles size={16} />
+              {busy === "format" ? "排版中…" : "AI 智能排版"}
+            </button>
+            <button className="primary-button" onClick={copyToLayout}>
+              复制到排版台
             </button>
             <button className="panel-action" onClick={() => saveCurrentVersion()}>
               保存版本
@@ -499,7 +665,9 @@ export default function App() {
               <span>AI 推荐</span>
               <strong>{allStylePresets.find((item) => item.id === recommendation.styleId)?.name}</strong>
               <p>{recommendation.reason}</p>
-              <button onClick={() => void runSmartLayout()}>重新分析</button>
+              <button disabled={busy !== null} onClick={() => void runSmartLayout()}>
+                {busy === "layout" ? "分析中…" : "AI智能排版·重新分析"}
+              </button>
             </article>
             <div className="preset-grid">
               {allStylePresets.map((preset) => (
@@ -651,4 +819,23 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function parseFirstTitle(input: string): string {
+  return (
+    input
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s*/, "").replace(/^#+\s*/, "").trim())
+      .find(Boolean) ?? "未命名草稿"
+  );
+}
+
+function updateArticleTitle(article: ArticleAst, title: string): ArticleAst {
+  return {
+    ...article,
+    meta: { ...article.meta, title },
+    blocks: article.blocks.map((block, index) =>
+      index === 0 && block.type === "title" ? { ...block, text: title } : block
+    ),
+  };
 }

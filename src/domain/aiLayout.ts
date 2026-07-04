@@ -3,6 +3,8 @@ import type {
   ArticleAnalysis,
   ArticleAst,
   ArticleBlock,
+  BlockRole,
+  LayoutPlan,
   LayoutRecommendation,
   StyleOverrides,
 } from "./types";
@@ -64,6 +66,18 @@ export function recommendLayout(article: ArticleAst): LayoutRecommendation {
   };
 }
 
+export function recommendLayoutPlan(article: ArticleAst): LayoutPlan[] {
+  const recommendation = recommendLayout(article);
+  return [
+    {
+      styleId: recommendation.styleId,
+      reason: recommendation.reason.slice(0, 28),
+      components: recommendationToComponents(recommendation.overrides),
+      blocks: inferBlockRoles(article),
+    },
+  ];
+}
+
 function inferGenre(text: string, blocks: ArticleBlock[], hasList: boolean): string {
   if (/文化|传统|古典|国风|诗词|历史/.test(text)) {
     return "文化";
@@ -111,11 +125,11 @@ function buildAdaptiveOverrides(analysis: ArticleAnalysis): StyleOverrides {
   const overrides: StyleOverrides = {};
 
   if (analysis.hasList) {
-    overrides["list.variant"] = "number-circle-card";
+    overrides["components.list.variant"] = "number-circle-card";
   }
 
   if (analysis.strongQuotes >= 2) {
-    overrides["quote.variant"] = "center-large-text";
+    overrides["components.quote.variant"] = "center-large-text";
     overrides["typography.bodySize"] = "16px";
   }
 
@@ -126,17 +140,69 @@ function buildAdaptiveOverrides(analysis: ArticleAnalysis): StyleOverrides {
   }
 
   if (analysis.genre === "干货") {
-    overrides["emphasis.variant"] = "highlight-bg";
+    overrides["components.emphasis.variant"] = "highlight";
     overrides["palette.primary"] = "#2B6CB0";
     overrides["rhythm.paragraphGap"] = "16px";
   }
 
   if (analysis.genre === "文化") {
     overrides["palette.primary"] = "#9F2F24";
-    overrides["divider.variant"] = "seal-divider";
+    overrides["components.divider.variant"] = "ornament";
   }
 
   return overrides;
+}
+
+function recommendationToComponents(overrides: StyleOverrides): NonNullable<LayoutPlan["components"]> {
+  const result: NonNullable<LayoutPlan["components"]> = {};
+  Object.entries(overrides).forEach(([path, value]) => {
+    const match = path.match(/^components\.(title|heading|quote|list|emphasis|divider)\.variant$/);
+    if (match && typeof value === "string") {
+      result[match[1] as keyof NonNullable<LayoutPlan["components"]>] = value;
+    }
+  });
+  return result;
+}
+
+function inferBlockRoles(article: ArticleAst): NonNullable<LayoutPlan["blocks"]> {
+  const roles: NonNullable<LayoutPlan["blocks"]> = [];
+  const firstParagraph = article.blocks.find((block) => block.type === "paragraph");
+  if (firstParagraph) {
+    roles.push({ blockId: firstParagraph.id, role: "lead" });
+  }
+
+  const firstQuote = article.blocks.find((block) => block.type === "quote");
+  if (firstQuote) {
+    roles.push({ blockId: firstQuote.id, role: "keyQuote" });
+  }
+
+  const orderedLists = article.blocks.filter((block) => block.type === "list" && block.ordered).slice(0, 2);
+  orderedLists.forEach((block) => roles.push({ blockId: block.id, role: "steps" }));
+
+  const summary = article.blocks.find((block) => {
+    if (block.type !== "paragraph") {
+      return false;
+    }
+    const text = block.runs.map((run) => run.text).join("").trim();
+    return /^(总结|最后|小结|总之)/.test(text);
+  });
+  if (summary) {
+    roles.push({ blockId: summary.id, role: "summary" });
+  }
+
+  return dedupeRoles(roles);
+}
+
+function dedupeRoles(roles: Array<{ blockId: string; role: BlockRole }>) {
+  const seen = new Set<string>();
+  return roles.filter((item) => {
+    const key = `${item.blockId}:${item.role}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildReason(analysis: ArticleAnalysis): string {

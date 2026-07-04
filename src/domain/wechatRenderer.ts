@@ -67,6 +67,16 @@ function renderTitle(text: string, preset: StylePreset, block: ArticleBlock): st
     "line-height": "1.42",
   };
 
+  if (preset.components.title.variant === "gradient-band") {
+    return `<h1 style="${style({ ...common, "text-align": "center", ...toInlineOverride(block.style) })}">${escapeHtml(text)}</h1><section style="${style({
+      margin: `-${preset.rhythm.paragraphGap} auto ${preset.rhythm.sectionGap}`,
+      width: "64px",
+      height: "4px",
+      background: `linear-gradient(90deg,transparent,${preset.palette.primary},transparent)`,
+      "border-radius": "999px",
+    })}"></section>`;
+  }
+
   if (preset.components.title.variant.includes("center")) {
     return `<h1 style="${style({ ...common, "text-align": "center", ...toInlineOverride(block.style) })}">${escapeHtml(text)}</h1>`;
   }
@@ -93,6 +103,47 @@ function renderHeading(text: string, preset: StylePreset, index: number, block: 
     "font-weight": "700",
     "line-height": "1.5",
   };
+
+  if (variant === "chapter-badge") {
+    return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
+      display: "inline-block",
+      background: preset.palette.primary,
+      color: "#FFFFFF",
+      "border-radius": "6px",
+      padding: "2px 9px",
+      "font-weight": "700",
+      "font-size": "13px",
+      "margin-right": "10px",
+    })}">${String(index).padStart(2, "0")}</span>${escapeHtml(text)}</h2>`;
+  }
+
+  if (variant === "gradient-underline") {
+    return `<h2 style="${style({ ...common, color: preset.palette.primary, ...toInlineOverride(block.style) })}"><span style="${style({
+      background: `linear-gradient(transparent 62%, ${preset.palette.primary}33 62%)`,
+      padding: "0 3px",
+    })}">${escapeHtml(text)}</span></h2>`;
+  }
+
+  if (variant === "block-fill") {
+    return `<h2 style="${style({
+      ...common,
+      color: "#FFFFFF",
+      background: preset.palette.primary,
+      padding: "6px 12px",
+      "border-radius": "6px",
+      ...toInlineOverride(block.style),
+    })}">${escapeHtml(text)}</h2>`;
+  }
+
+  if (variant === "center-ornament") {
+    return `<h2 style="${style({
+      ...common,
+      color: preset.palette.primary,
+      "text-align": "center",
+      "letter-spacing": "2px",
+      ...toInlineOverride(block.style),
+    })}">✦ ${escapeHtml(text)} ✦</h2>`;
+  }
 
   if (variant === "number-badge") {
     return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
@@ -138,6 +189,57 @@ function renderParagraph(
   const drop = preset.typography.firstLetterDrop && index <= 2;
   const content = runs.map((run) => renderRun(run, preset)).join("");
 
+  if (block.role === "keyQuote") {
+    return renderQuoteContent(content, preset, block, "golden-card", false);
+  }
+
+  if (block.role === "emphasis") {
+    return `<section style="${style({
+      margin: `0 0 ${preset.rhythm.paragraphGap}`,
+      background: preset.palette.secondary,
+      "border-left": `3px solid ${preset.palette.primary}`,
+      padding: "12px 14px",
+      "border-radius": "6px",
+      color: preset.palette.textMain,
+      "font-size": preset.typography.bodySize,
+      "line-height": String(preset.typography.lineHeight),
+      ...toInlineOverride(block.style),
+    })}">${content}</section>`;
+  }
+
+  if (block.role === "summary") {
+    return `<section style="${style({
+      margin: `${preset.rhythm.sectionGap} 0`,
+      padding: "14px 16px",
+      background: preset.palette.secondary,
+      color: preset.palette.textMain,
+      "border-radius": "8px",
+      "line-height": String(preset.typography.lineHeight),
+      ...toInlineOverride(block.style),
+    })}"><span style="${style({
+      display: "inline-block",
+      background: preset.palette.primary,
+      color: "#FFFFFF",
+      "border-radius": "4px",
+      padding: "1px 7px",
+      "font-size": "12px",
+      "margin-bottom": "8px",
+    })}">小结</span><section>${content}</section></section>`;
+  }
+
+  if (block.role === "lead") {
+    return `<p style="${style({
+      margin: `0 0 ${preset.rhythm.paragraphGap}`,
+      color: preset.palette.textSub,
+      "font-size": increasePx(preset.typography.bodySize, 1),
+      "line-height": String(preset.typography.lineHeight),
+      "text-align": preset.rhythm.align,
+      padding: "0 0 0 12px",
+      "border-left": `3px solid ${preset.palette.primary}`,
+      ...toInlineOverride(block.style),
+    })}">${content}</p>`;
+  }
+
   if (drop && content.length > 0) {
     const first = content.slice(0, 1);
     const rest = content.slice(1);
@@ -155,8 +257,17 @@ function renderParagraph(
 }
 
 function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): string {
-  const variant = preset.components.quote.variant;
+  const variant = block.role === "keyQuote" ? "golden-card" : preset.components.quote.variant;
+  return renderQuoteContent(escapeHtml(text), preset, block, variant, true);
+}
 
+function renderQuoteContent(
+  content: string,
+  preset: StylePreset,
+  block: ArticleBlock,
+  variant: string,
+  escaped: boolean
+): string {
   if (variant === "center-large-text") {
     return `<section style="${style({
       margin: `${preset.rhythm.sectionGap} 0`,
@@ -166,7 +277,7 @@ function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): st
       "line-height": "1.75",
       "text-align": "center",
       ...toInlineOverride(block.style),
-    })}">${escapeHtml(text)}</section>`;
+    })}">${content}</section>`;
   }
 
   if (variant === "left-line") {
@@ -178,7 +289,49 @@ function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): st
       "font-size": preset.typography.bodySize,
       "line-height": String(preset.typography.lineHeight),
       ...toInlineOverride(block.style),
-    })}">${escapeHtml(text)}</section>`;
+    })}">${content}</section>`;
+  }
+
+  if (variant === "golden-card") {
+    return `<section style="${style({
+      margin: `${preset.rhythm.sectionGap} 0`,
+      padding: "18px 20px",
+      background: `linear-gradient(135deg,${preset.palette.secondary},#fff)`,
+      color: preset.palette.textMain,
+      "border-radius": "10px",
+      border: `1px solid ${preset.palette.primary}22`,
+      "text-align": "center",
+      "font-size": preset.typography.bodySize,
+      "line-height": String(preset.typography.lineHeight),
+      ...toInlineOverride(block.style),
+    })}"><section style="${style({
+      color: preset.palette.primary,
+      "font-size": "26px",
+      "line-height": "1",
+      "margin-bottom": "6px",
+    })}">❝</section>${content}</section>`;
+  }
+
+  if (variant === "corner-tag") {
+    return `<section style="${style({
+      margin: `${preset.rhythm.sectionGap} 0`,
+      padding: "14px 16px",
+      background: preset.palette.secondary,
+      color: preset.palette.textMain,
+      "border-radius": "8px",
+      border: `1px solid ${preset.palette.primary}22`,
+      "font-size": preset.typography.bodySize,
+      "line-height": String(preset.typography.lineHeight),
+      ...toInlineOverride(block.style),
+    })}"><span style="${style({
+      display: "inline-block",
+      background: preset.palette.primary,
+      color: "#FFFFFF",
+      "border-radius": "4px",
+      padding: "1px 7px",
+      "font-size": "12px",
+      "margin-bottom": "8px",
+    })}">金句</span><section>${content}</section></section>`;
   }
 
   return `<section style="${style({
@@ -191,7 +344,7 @@ function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): st
     "font-size": preset.typography.bodySize,
     "line-height": String(preset.typography.lineHeight),
     ...toInlineOverride(block.style),
-  })}">${escapeHtml(text)}</section>`;
+  })}">${escaped ? content : content}</section>`;
 }
 
 function renderList(
@@ -200,14 +353,23 @@ function renderList(
   preset: StylePreset,
   block: ArticleBlock
 ): string {
+  const variant = block.role === "steps" ? "number-circle-card" : preset.components.list.variant;
   const tag = ordered ? "ol" : "ul";
   const children = items
     .map((item, index) => {
       const marker = ordered ? `${index + 1}` : "";
+      if (variant === "arrow-accent") {
+        return `<li style="${style({
+          margin: `0 0 ${preset.rhythm.paragraphGap}`,
+          padding: "0",
+          color: preset.palette.textMain,
+          "list-style": "none",
+        })}"><span style="${style({ color: preset.palette.primary, "font-weight": "700", "margin-right": "8px" })}">▸</span>${escapeHtml(item)}</li>`;
+      }
       return `<li style="${style({
         margin: `0 0 ${preset.rhythm.paragraphGap}`,
-        padding: "12px 14px",
-        background: preset.components.list.variant.includes("card") ? preset.palette.secondary : "transparent",
+        padding: variant === "minimal-dot" ? "0" : "10px 14px",
+        background: variant === "card-items" || variant === "number-circle-card" ? preset.palette.secondary : "transparent",
         "border-radius": "8px",
         color: preset.palette.textMain,
         "list-style": "none",
@@ -296,19 +458,38 @@ function renderTable(rows: TableRow[], preset: StylePreset, block: ArticleBlock)
 }
 
 function renderDivider(preset: StylePreset, block: ArticleBlock): string {
-  if (preset.components.divider.variant === "blank-space") {
+  const variant = preset.components.divider.variant;
+  if (variant === "blank-space") {
     return `<br />`;
+  }
+
+  if (variant === "ornament") {
+    return `<section style="${style({
+      margin: `${preset.rhythm.sectionGap} auto`,
+      color: preset.palette.textSub,
+      "text-align": "center",
+      ...toInlineOverride(block.style),
+    })}">❖</section>`;
+  }
+
+  if (variant === "gradient-line") {
+    return `<section style="${style({
+      margin: `${preset.rhythm.sectionGap} auto`,
+      height: "2px",
+      background: `linear-gradient(90deg,transparent,${preset.palette.primary},transparent)`,
+      ...toInlineOverride(block.style),
+    })}"></section>`;
   }
 
   return `<section style="${style({
     margin: `${preset.rhythm.sectionGap} auto`,
     width: "72px",
     height: "1px",
-    background: preset.components.divider.variant.includes("dot")
+    background: variant === "dotted"
       ? "transparent"
       : preset.palette.secondary,
-    "border-top": preset.components.divider.variant.includes("dot")
-      ? `2px dotted ${preset.palette.primary}`
+    "border-top": variant === "dotted"
+      ? `1px dotted ${preset.palette.textSub}`
       : "0",
     ...toInlineOverride(block.style),
   })}"></section>`;
@@ -402,9 +583,16 @@ function renderRun(run: TextRun, preset: StylePreset): string {
       return `<span style="${style({ "text-decoration": "line-through" })}">${inner}</span>`;
     }
 
+    if (preset.components.emphasis.variant === "underline-accent") {
+      return `<span style="${style({
+        ...(run.attrs?.color ? {} : { color: preset.palette.textMain }),
+        "border-bottom": `2px solid ${preset.palette.primary}`,
+      })}">${inner}</span>`;
+    }
+
     return `<span style="${style({
       ...(run.attrs?.color ? {} : { color: preset.palette.textMain }),
-      ...(run.attrs?.background ? {} : { background: preset.palette.secondary }),
+      ...(run.attrs?.background ? {} : { background: `linear-gradient(transparent 60%, ${preset.palette.primary}40 60%)` }),
       padding: "0 3px",
     })}">${inner}</span>`;
   }, content);
@@ -438,4 +626,9 @@ function escapeHtml(value: string): string {
 
 function escapeAttr(value: string): string {
   return escapeHtml(value).replace(/'/g, "&#39;");
+}
+
+function increasePx(value: string, amount: number) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? `${parsed + amount}px` : value;
 }

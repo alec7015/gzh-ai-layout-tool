@@ -1,4 +1,4 @@
-import type { ArticleAst, ArticleBlock, BlockOverride, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
+import type { ArticleAst, ArticleBlock, BlockOverride, BlockRole, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
 
 export type TiptapNode = {
   type: string;
@@ -119,6 +119,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       type: node.attrs?.level === 1 ? "title" : "heading",
       text,
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
@@ -132,6 +133,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
         src: image[2],
         caption: image[1] || "配图",
         style: styleFromNode(node),
+        role: roleFromNode(node),
       };
     }
 
@@ -140,6 +142,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       type: "paragraph",
       runs: inlineRuns(node),
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
@@ -149,6 +152,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       type: "quote",
       text: inlineText(node).trim(),
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
@@ -159,6 +163,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       ordered: node.type === "orderedList",
       items: (node.content ?? []).map((item) => inlineText(item).trim()).filter(Boolean),
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
@@ -172,6 +177,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       gap: Number(attrs.gap ?? 6),
       radius: Number(attrs.radius ?? 8),
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
@@ -181,11 +187,12 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       type: "table",
       rows: tableRowsFromNode(node),
       style: styleFromNode(node),
+      role: roleFromNode(node),
     };
   }
 
   if (node.type === "horizontalRule") {
-    return { id: blockIdFromNode(node, "divider", index), type: "divider", style: styleFromNode(node) };
+    return { id: blockIdFromNode(node, "divider", index), type: "divider", style: styleFromNode(node), role: roleFromNode(node) };
   }
 
   return null;
@@ -340,6 +347,9 @@ function createBlockId(type: string, index: number): string {
 function blockAttrs(block: ArticleBlock): Record<string, unknown> {
   const style = block.style ?? {};
   const attrs: Record<string, unknown> = { blockId: block.id };
+  if (block.role) {
+    attrs.blockRole = block.role;
+  }
   if (Object.keys(style).length > 0) {
     attrs.blockStyle = style;
   }
@@ -347,6 +357,20 @@ function blockAttrs(block: ArticleBlock): Record<string, unknown> {
     attrs.textAlign = style["text-align"];
   }
   return attrs;
+}
+
+function roleFromNode(node: TiptapNode): BlockRole | undefined {
+  return isBlockRole(node.attrs?.blockRole) ? node.attrs.blockRole : undefined;
+}
+
+function isBlockRole(value: unknown): value is BlockRole {
+  return (
+    value === "lead" ||
+    value === "keyQuote" ||
+    value === "emphasis" ||
+    value === "steps" ||
+    value === "summary"
+  );
 }
 
 function blockIdFromNode(node: TiptapNode, type: string, index: number): string {

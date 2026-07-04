@@ -25,6 +25,7 @@ interface LayoutEditorProps {
     bodySize: string;
     paragraphGap: string;
     footerText: string;
+    autoPalette: boolean;
   };
   onSettingsChange(next: Partial<LayoutEditorProps["settings"]>): void;
 }
@@ -182,6 +183,14 @@ export default function LayoutEditor({
         Object.keys(nextStyle).length > 0 ? nextStyle : null
       )
     );
+  }
+
+  function clearBlockRoleAttr() {
+    const block = findCurrentBlock(editor);
+    if (!editor || !block) {
+      return;
+    }
+    editor.view.dispatch(editor.state.tr.setNodeAttribute(block.pos, "blockRole", null));
   }
 
   const fontSizeAttr = editor?.getAttributes("textStyle").fontSize;
@@ -350,6 +359,7 @@ export default function LayoutEditor({
         </button>
         <button type="button" onClick={() => {
           ["background", "line-height"].forEach((key) => setBlockStyleAttr(key, null));
+          clearBlockRoleAttr();
           editor?.chain().focus().setTextAlign("left").run();
         }}>
           清块样式
@@ -366,6 +376,10 @@ export default function LayoutEditor({
               <label>
                 主题色
                 <input type="color" value={settings.themeColor} onChange={(event) => onSettingsChange({ themeColor: event.target.value })} />
+              </label>
+              <label className="settings-inline">
+                <input type="checkbox" checked={settings.autoPalette} onChange={(event) => onSettingsChange({ autoPalette: event.target.checked })} />
+                自动配套色
               </label>
               <label>
                 正文字号

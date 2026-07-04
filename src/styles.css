@@ -282,6 +282,72 @@ body.is-col-resizing {
   background: #ffffff;
 }
 
+.plan-list {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 12px;
+}
+
+.recommend-card .plan-card {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  color: #25313d;
+  text-align: left;
+  border: 1px solid #dfe7ec;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.recommend-card .plan-card.selected {
+  outline: 2px solid #1f7a5f;
+  border-color: #1f7a5f;
+}
+
+.recommend-card .plan-thumb {
+  display: block;
+  height: 180px;
+  overflow: hidden;
+  border: 1px solid #e6ebef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.recommend-card .plan-thumb-inner {
+  display: block;
+  width: 680px;
+  transform: scale(0.33);
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.recommend-card .plan-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #25313d;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recommend-card .plan-meta i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.recommend-card .plan-meta strong {
+  margin: 0;
+}
+
+.recommend-card .plan-card em {
+  color: #66737f;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
 .layout-ai-status {
   display: flex;
   align-items: center;
@@ -573,6 +639,11 @@ body.is-col-resizing {
   resize: vertical;
   border: 1px solid #dfe5ea;
   border-radius: 7px;
+}
+
+.layout-settings-popover .settings-inline {
+  grid-template-columns: 18px 1fr;
+  color: #25313d;
 }
 
 .layout-settings-actions {

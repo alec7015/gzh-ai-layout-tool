@@ -1,5 +1,23 @@
 import type { StylePreset } from "./types";
 
+export const VARIANT_VOCABULARY = {
+  title: ["block", "center-serif", "gradient-band"],
+  heading: [
+    "number-badge",
+    "left-color-bar",
+    "plain-bold",
+    "chapter-badge",
+    "gradient-underline",
+    "block-fill",
+    "center-ornament",
+  ],
+  quote: ["center-large-text", "left-line", "large-quote-card", "golden-card", "corner-tag"],
+  list: ["minimal-dot", "number-circle-card", "arrow-accent", "card-items"],
+  emphasis: ["primary-bold", "highlight", "underline-accent"],
+  divider: ["blank-space", "thin-gray-line", "dotted", "ornament", "gradient-line"],
+  image: ["caption-frame"],
+} as const;
+
 export const stylePresets: StylePreset[] = [
   {
     id: "magazine_essay",

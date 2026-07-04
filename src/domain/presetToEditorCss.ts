@@ -1,6 +1,23 @@
 import type { StylePreset } from "./types";
 
 export function presetToEditorCss(preset: StylePreset, scope = ".layout-editor .tiptap"): string {
+  const headingBlock =
+    preset.components.heading.variant === "block-fill"
+      ? `background: ${preset.palette.primary}; color: #fff; padding: 6px 12px; border-radius: 6px; border-left: 0;`
+      : preset.components.heading.variant === "gradient-underline"
+        ? `background: linear-gradient(transparent 62%, ${preset.palette.primary}33 62%); border-left: 0; padding-left: 0;`
+        : "";
+  const quoteBlock =
+    preset.components.quote.variant === "golden-card"
+      ? `background: linear-gradient(135deg, ${preset.palette.secondary}, #fff); border: 1px solid ${preset.palette.primary}22; border-radius: 10px; text-align: center;`
+      : "";
+  const dividerBlock =
+    preset.components.divider.variant === "dotted"
+      ? `border-top: 1px dotted ${preset.palette.textSub};`
+      : preset.components.divider.variant === "gradient-line"
+        ? `height: 2px; border-top: 0; background: linear-gradient(90deg, transparent, ${preset.palette.primary}, transparent);`
+        : "";
+
   return `
 ${scope} {
   color: ${preset.palette.textMain};
@@ -24,6 +41,7 @@ ${scope} h2 {
   font-weight: 750;
   border-left: 4px solid ${preset.palette.primary};
   padding-left: 10px;
+  ${headingBlock}
 }
 ${scope} p {
   margin: 0 0 ${preset.rhythm.paragraphGap};
@@ -34,6 +52,7 @@ ${scope} blockquote {
   color: ${preset.palette.textSub};
   background: ${preset.palette.secondary};
   border-left: 4px solid ${preset.palette.primary};
+  ${quoteBlock}
 }
 ${scope} ul,
 ${scope} ol {
@@ -61,6 +80,27 @@ ${scope} hr {
   margin: ${preset.rhythm.sectionGap} auto;
   border: 0;
   border-top: 1px solid ${preset.palette.secondary};
+  ${dividerBlock}
+}
+${scope} [data-block-role="lead"] {
+  color: ${preset.palette.textSub};
+  padding-left: 12px;
+  border-left: 3px solid ${preset.palette.primary};
+}
+${scope} [data-block-role="emphasis"],
+${scope} [data-block-role="summary"] {
+  background: ${preset.palette.secondary};
+  border-left: 3px solid ${preset.palette.primary};
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+${scope} [data-block-role="keyQuote"] {
+  background: linear-gradient(135deg, ${preset.palette.secondary}, #fff);
+  border: 1px solid ${preset.palette.primary}22;
+  border-radius: 10px;
+}
+${scope} [data-block-role="steps"] {
+  background: ${preset.palette.secondary};
 }
 `;
 }

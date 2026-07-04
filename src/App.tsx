@@ -13,9 +13,9 @@ import {
 import { EditorBoundary } from "./components/EditorBoundary";
 import { SettingsModal } from "./components/SettingsModal";
 import { useColumnResize } from "./hooks/useColumnResize";
-import { recommendLayout } from "./domain/aiLayout";
+import { recommendLayout, recommendLayoutPlan } from "./domain/aiLayout";
 import { callChatCompletionsJson, callChatCompletionsText } from "./domain/aiClient";
-import { buildLayoutRequest, coerceLayoutRecommendation } from "./domain/aiLayoutSchema";
+import { buildLayoutPlanRequest, coerceLayoutPlan } from "./domain/aiLayoutSchema";
 import {
   buildSmartFormatRequest,
   buildWritingRequest,
@@ -59,7 +59,9 @@ import {
 import { createFeedback, type Feedback } from "./domain/feedback";
 import { mergeStylePreset } from "./domain/styleEngine";
 import { defaultStylePreset, stylePresets } from "./domain/stylePresets";
-import type { ArticleAst, LayoutRecommendation, StyleOverrides } from "./domain/types";
+import { applyRolesToArticle, hasAnyRole, planToOverrides } from "./domain/layoutPlan";
+import { derivePaletteOverrides } from "./domain/paletteDerive";
+import type { ArticleAst, LayoutPlan, LayoutRecommendation, StyleOverrides } from "./domain/types";
 import { renderWechatHtml } from "./domain/wechatRenderer";
 
 type Workspace = "writer" | "layout";
@@ -88,7 +90,10 @@ export default function App() {
   const [recommendation, setRecommendation] = useState<LayoutRecommendation>(() =>
     recommendLayout(createSampleArticle())
   );
+  const [planCandidates, setPlanCandidates] = useState<LayoutPlan[]>([]);
+  const [activePlanIndex, setActivePlanIndex] = useState<number | null>(null);
   const [userOverrides, setUserOverrides] = useState<StyleOverrides>({});
+  const [autoPalette, setAutoPalette] = useState(true);
   const [copied, setCopied] = useState(false);
   const [darkPreview, setDarkPreview] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>("phone");
@@ -138,6 +143,10 @@ export default function App() {
   const layoutHtml = useMemo(
     () => (layoutArticle ? renderWechatHtml(layoutArticle, mergedPreset) : ""),
     [layoutArticle, mergedPreset]
+  );
+  const thumbArticle = useMemo(
+    () => (layoutArticle ? { ...layoutArticle, blocks: layoutArticle.blocks.slice(0, 10) } : null),
+    [layoutArticle]
   );
   const activeArticle = workspace === "layout" && layoutArticle ? layoutArticle : article;
   const wordCount = useMemo(() => astToPlainText(activeArticle).replace(/\s/g, "").length, [activeArticle]);
@@ -413,6 +422,27 @@ export default function App() {
     setFeedback(createFeedback("success", "已保存为我的版式。"));
   }
 
+  function applyPlan(plan: LayoutPlan, index: number | null, statusMessage?: string) {
+    const nextRecommendation = {
+      styleId: plan.styleId,
+      reason: plan.reason,
+      overrides: planToOverrides(plan),
+    };
+    setRecommendation(nextRecommendation);
+    setSelectedStyleId(plan.styleId);
+    setActivePlanIndex(index);
+    if (plan.blocks?.length || hasAnyRole(layoutArticle)) {
+      setLayoutArticle((current) => (current ? applyRolesToArticle(current, plan.blocks ?? []) : current));
+      setLayoutEditorVersion((version) => version + 1);
+    }
+    setLayoutAiStatus({
+      phase: "success",
+      message: statusMessage ?? `已应用：${plan.reason}`,
+      at: Date.now(),
+    });
+    setFeedback(createFeedback("success", statusMessage ?? `已应用：${plan.reason}`));
+  }
+
   async function runSmartLayout() {
     if (busy) {
       return;
@@ -428,37 +458,41 @@ export default function App() {
     }
     setBusy("layout");
     setLayoutAiStatus({ phase: "running" });
+    setPlanCandidates([]);
+    setActivePlanIndex(null);
     setFeedback(createFeedback("info", "正在分析版式…"));
     try {
       const result = await callChatCompletionsJson<unknown>(
         aiSettings,
-        buildLayoutRequest(layoutArticle)
+        buildLayoutPlanRequest(layoutArticle, allStylePresets)
       );
-      const coerced = result.ok ? coerceLayoutRecommendation(result.data) : null;
-      const next = coerced ?? recommendLayout(layoutArticle);
-      setRecommendation(next);
-      setSelectedStyleId(next.styleId);
-      if (coerced) {
-        setLayoutAiStatus({
-          phase: "success",
-          message: `已应用模型建议：${allStylePresets.find((item) => item.id === next.styleId)?.name ?? next.styleId}`,
-          at: Date.now(),
-        });
-        setFeedback(createFeedback("success", "已根据模型建议完成版式推荐。"));
-      } else if (result.ok) {
+      const coerced = result.ok ? coerceLayoutPlan(result.data, layoutArticle, allStylePresets) : null;
+      const plans = coerced ?? recommendLayoutPlan(layoutArticle);
+      const fallbackMessage = result.ok ? "模型返回方案不可用" : result.message;
+      setPlanCandidates(plans);
+      applyPlan(
+        plans[0],
+        0,
+        coerced
+          ? `已生成 ${plans.length} 套方案，已应用方案 A`
+          : result.ok
+            ? "模型返回方案不可用，已用本地规则生成方案 A"
+            : `${fallbackMessage} 已用本地规则生成方案 A`
+      );
+      if (!coerced && result.ok) {
         setLayoutAiStatus({
           phase: "fallback",
           message: "模型返回版式不可用，已用本地规则推荐",
           at: Date.now(),
         });
         setFeedback(createFeedback("info", "模型返回版式不可用，已使用本地规则推荐。"));
-      } else {
+      } else if (!coerced) {
         setLayoutAiStatus({
           phase: "fallback",
-          message: `${result.message} 已用本地规则推荐`,
+          message: `${fallbackMessage} 已用本地规则推荐`,
           at: Date.now(),
         });
-        setFeedback(createFeedback("info", `${result.message} 已使用本地规则推荐版式。`));
+        setFeedback(createFeedback("info", `${fallbackMessage} 已使用本地规则推荐版式。`));
       }
     } finally {
       setBusy(null);
@@ -482,7 +516,10 @@ export default function App() {
   }
 
   function setThemeColor(color: string) {
-    setUserOverrides((current) => ({ ...current, "palette.primary": color }));
+    setUserOverrides((current) => ({
+      ...current,
+      ...(autoPalette ? derivePaletteOverrides(color) : { "palette.primary": color }),
+    }));
   }
 
   function setBodySize(size: string) {
@@ -506,6 +543,7 @@ export default function App() {
     bodySize?: string;
     paragraphGap?: string;
     footerText?: string;
+    autoPalette?: boolean;
   }) {
     if (next.themeColor !== undefined) {
       setThemeColor(next.themeColor);
@@ -519,6 +557,23 @@ export default function App() {
     if (next.footerText !== undefined) {
       setFooterText(next.footerText);
     }
+    if (next.autoPalette !== undefined) {
+      setAutoPalette(next.autoPalette);
+    }
+  }
+
+  function renderPlanThumb(plan: LayoutPlan) {
+    if (!thumbArticle) {
+      return "";
+    }
+
+    const preset = allStylePresets.find((item) => item.id === plan.styleId) ?? defaultStylePreset;
+    const merged = mergeStylePreset(preset, planToOverrides(plan), {});
+    return renderWechatHtml(applyRolesToArticle(thumbArticle, plan.blocks ?? []), merged);
+  }
+
+  function planStyleName(plan: LayoutPlan) {
+    return allStylePresets.find((item) => item.id === plan.styleId)?.name ?? plan.styleId;
   }
 
   return (
@@ -748,9 +803,33 @@ export default function App() {
               版式库
             </div>
             <article className="recommend-card">
-              <span>AI 推荐</span>
-              <strong>{allStylePresets.find((item) => item.id === recommendation.styleId)?.name}</strong>
-              <p>{recommendation.reason}</p>
+              <span>AI 合成方案</span>
+              <strong>{planCandidates.length > 0 ? `${planCandidates.length} 套候选` : planStyleName({ styleId: recommendation.styleId, reason: recommendation.reason })}</strong>
+              <p>{planCandidates.length > 0 ? "点击方案卡可切换整套版式、配色与角色标注。" : recommendation.reason}</p>
+              {planCandidates.length > 0 ? (
+                <div className="plan-list">
+                  {planCandidates.map((plan, index) => (
+                    <button
+                      className={activePlanIndex === index ? "plan-card selected" : "plan-card"}
+                      key={`${plan.styleId}-${index}`}
+                      type="button"
+                      onClick={() => applyPlan(plan, index)}
+                    >
+                      <span className="plan-thumb">
+                        <span
+                          className="plan-thumb-inner"
+                          dangerouslySetInnerHTML={{ __html: renderPlanThumb(plan) }}
+                        />
+                      </span>
+                      <span className="plan-meta">
+                        <i style={{ background: plan.palette?.primary ?? (allStylePresets.find((item) => item.id === plan.styleId) ?? defaultStylePreset).palette.primary }} />
+                        <strong>方案 {String.fromCharCode(65 + index)} · {planStyleName(plan)}</strong>
+                      </span>
+                      <em>{plan.reason}</em>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className={`layout-ai-status ${layoutAiStatus.phase}`}>
                 <i />
                 {layoutAiStatus.phase === "idle"
@@ -804,6 +883,7 @@ export default function App() {
                       bodySize: String(mergedPreset.typography.bodySize),
                       paragraphGap: String(mergedPreset.rhythm.paragraphGap),
                       footerText: String(mergedPreset.decorations.footerText ?? ""),
+                      autoPalette,
                     }}
                     onSettingsChange={updateLayoutSettings}
                   />

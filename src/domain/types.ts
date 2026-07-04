@@ -12,6 +12,7 @@ export type BlockType =
 export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike";
 
 export type BlockOverride = Record<string, string | number | boolean | null>;
+export type BlockRole = "lead" | "keyQuote" | "emphasis" | "steps" | "summary";
 
 export interface TextRun {
   text: string;
@@ -27,6 +28,7 @@ export interface BaseBlock {
   id: string;
   type: BlockType;
   style?: BlockOverride;
+  role?: BlockRole;
 }
 
 export interface TitleBlock extends BaseBlock {
@@ -178,4 +180,19 @@ export interface LayoutRecommendation {
   styleId: string;
   reason: string;
   overrides: StyleOverrides;
+}
+
+export interface LayoutPlan {
+  styleId: string;
+  reason: string;
+  palette?: {
+    primary: string;
+  };
+  components?: Partial<
+    Record<"title" | "heading" | "quote" | "list" | "emphasis" | "divider", string>
+  >;
+  blocks?: Array<{
+    blockId: string;
+    role: BlockRole;
+  }>;
 }

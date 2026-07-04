@@ -39,7 +39,7 @@ describe("AI layout recommendation", () => {
     expect(analysis.hasList).toBe(true);
     expect(recommendation.styleId).toBe("listicle_cards");
     expect(recommendation.reason).toContain("方法");
-    expect(recommendation.overrides["list.variant"]).toBe("number-circle-card");
+    expect(recommendation.overrides["components.list.variant"]).toBe("number-circle-card");
   });
 });
 

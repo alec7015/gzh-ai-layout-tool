@@ -151,4 +151,23 @@ describe("tiptapAdapter", () => {
       ],
     });
   });
+
+  it("preserves block roles across Tiptap round trips", () => {
+    const article: ArticleAst = {
+      meta: { title: "角色标注" },
+      blocks: [
+        { id: "title-1", type: "title", text: "角色标注", style: {} },
+        { id: "p-lead", type: "paragraph", runs: [{ text: "开头引言" }], role: "lead", style: {} },
+        { id: "quote-key", type: "quote", text: "关键金句", role: "keyQuote", style: {} },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1].attrs).toMatchObject({ blockRole: "lead" });
+    expect(doc.content[2].attrs).toMatchObject({ blockRole: "keyQuote" });
+    expect(restored.blocks[1]).toMatchObject({ role: "lead" });
+    expect(restored.blocks[2]).toMatchObject({ role: "keyQuote" });
+  });
 });

@@ -93,7 +93,7 @@ describe("draftStore", () => {
     const restored = markdownToAst(markdown, { strictHeadings: true });
 
     expect(markdown).toContain("# 结构化文章");
-    expect(markdown).toContain("## 第一部分");
+    expect(markdown).toContain("# 第一部分");
     expect(markdown).toContain("这是一段**重点**和*提示*");
     expect(markdown).toContain("1. 第一步");
     expect(restored.blocks.map((block) => block.type)).toEqual([
@@ -128,17 +128,17 @@ describe("draftStore", () => {
     expect(loose.blocks[1]).toMatchObject({ type: "heading" });
   });
 
-  it("preserves markdown heading levels from ## to ####", () => {
-    const restored = markdownToAst("# 主标题\n\n## 一级标题\n\n### 二级标题\n\n#### 三级标题", {
+  it("preserves markdown heading levels from # to ###", () => {
+    const restored = markdownToAst("# 主标题\n\n# 一级标题\n\n## 二级标题\n\n### 三级标题", {
       strictHeadings: true,
     });
     const markdown = astToMarkdown(restored);
 
-    expect(restored.blocks[1]).toMatchObject({ type: "heading", level: 2, text: "一级标题" });
-    expect(restored.blocks[2]).toMatchObject({ type: "heading", level: 3, text: "二级标题" });
-    expect(restored.blocks[3]).toMatchObject({ type: "heading", level: 4, text: "三级标题" });
-    expect(markdown).toContain("## 一级标题");
-    expect(markdown).toContain("### 二级标题");
-    expect(markdown).toContain("#### 三级标题");
+    expect(restored.blocks[1]).toMatchObject({ type: "heading", level: 1, text: "一级标题" });
+    expect(restored.blocks[2]).toMatchObject({ type: "heading", level: 2, text: "二级标题" });
+    expect(restored.blocks[3]).toMatchObject({ type: "heading", level: 3, text: "三级标题" });
+    expect(markdown).toContain("# 一级标题");
+    expect(markdown).toContain("## 二级标题");
+    expect(markdown).toContain("### 三级标题");
   });
 });

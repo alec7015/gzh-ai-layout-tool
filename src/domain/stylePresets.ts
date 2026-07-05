@@ -18,6 +18,38 @@ export const VARIANT_VOCABULARY = {
   image: ["caption-frame"],
 } as const;
 
+export const VARIANT_LABELS = {
+  heading: {
+    "number-badge": "序号章",
+    "left-color-bar": "左侧色条",
+    "plain-bold": "无装饰加粗",
+    "chapter-badge": "章节徽标",
+    "gradient-underline": "荧光衬底",
+    "block-fill": "色块填充",
+    "center-ornament": "居中花饰",
+  },
+  quote: {
+    "center-large-text": "居中大字",
+    "left-line": "细线引用",
+    "large-quote-card": "大引号卡",
+    "golden-card": "金句卡",
+    "corner-tag": "角标卡片",
+  },
+  list: {
+    "minimal-dot": "极简圆点",
+    "number-circle-card": "圆号卡片",
+    "arrow-accent": "箭头强调",
+    "card-items": "卡片列表",
+  },
+  divider: {
+    "blank-space": "留白",
+    "thin-gray-line": "细灰线",
+    dotted: "虚线",
+    ornament: "装饰符",
+    "gradient-line": "渐变线",
+  },
+} as const;
+
 export const stylePresets: StylePreset[] = [
   {
     id: "magazine_essay",

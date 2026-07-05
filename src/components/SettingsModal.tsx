@@ -11,18 +11,31 @@ interface SettingsModalProps {
   settings: AiSettings;
   testing: boolean;
   testMessage: string;
+  storageUsage: {
+    drafts: number;
+    styles: number;
+    settings: number;
+    total: number;
+  };
   onChange(settings: AiSettings): void;
   onClose(): void;
   onTest(): void;
+  onClearVersions(): void;
+  onDeleteDrafts(): void;
+  onResetLocalData(): void;
 }
 
 export function SettingsModal({
   settings,
   testing,
   testMessage,
+  storageUsage,
   onChange,
   onClose,
   onTest,
+  onClearVersions,
+  onDeleteDrafts,
+  onResetLocalData,
 }: SettingsModalProps) {
   function update(next: Partial<AiSettings>) {
     onChange({ ...settings, ...next });
@@ -111,6 +124,28 @@ export function SettingsModal({
           />
         </label>
 
+        <section className="storage-management" aria-label="存储管理">
+          <h3>存储管理</h3>
+          <div className="storage-meter">
+            <span style={{ width: `${Math.min(100, Math.round(storageUsage.total / 1024 / 1024 / 10 * 100))}%` }} />
+          </div>
+          <p>
+            草稿 {formatBytes(storageUsage.drafts)} · 版式 {formatBytes(storageUsage.styles)} · 设置{" "}
+            {formatBytes(storageUsage.settings)}
+          </p>
+          <div className="storage-actions">
+            <button className="secondary-action" type="button" onClick={onClearVersions}>
+              清空所有版本历史
+            </button>
+            <button className="secondary-action danger" type="button" onClick={onDeleteDrafts}>
+              删除全部草稿
+            </button>
+            <button className="secondary-action danger" type="button" onClick={onResetLocalData}>
+              重置全部本地数据
+            </button>
+          </div>
+        </section>
+
         <footer className="settings-modal-footer">
           <span>{testMessage}</span>
           <button className="secondary-action" disabled={testing} onClick={onTest} type="button">
@@ -120,4 +155,14 @@ export function SettingsModal({
       </section>
     </div>
   );
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`;
+  }
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
 }

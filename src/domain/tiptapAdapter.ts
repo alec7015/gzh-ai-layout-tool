@@ -21,7 +21,27 @@ export function astToTiptapDoc(article: ArticleAst): TiptapDoc {
 }
 
 export function tiptapDocToAst(doc: TiptapDoc, previous?: ArticleAst): ArticleAst {
-  const blocks = (doc.content ?? []).map((node, index) => nodeToBlock(node, index)).filter(Boolean) as ArticleBlock[];
+  let titleTaken = false;
+  const blocks = (doc.content ?? []).map((node, index) => {
+    if (node.type === "heading") {
+      const text = inlineText(node).trim();
+      const attrs = node.attrs ?? {};
+      const isTitleCandidate =
+        (typeof attrs.blockType === "string" && attrs.blockType === "title") ||
+        (typeof attrs.blockId === "string" && /(?:^|[^a-zA-Z])title(?:[^a-zA-Z]|$)/.test(attrs.blockId));
+      const isTitle = isTitleCandidate && !titleTaken;
+      if (isTitle) titleTaken = true;
+      return {
+        id: blockIdFromNode(node, isTitle ? "title" : "heading", index),
+        type: isTitle ? "title" : "heading",
+        text,
+        ...(isTitle ? {} : { level: headingLevelFromNode(node) }),
+        style: styleFromNode(node),
+        role: roleFromNode(node),
+      } as ArticleBlock;
+    }
+    return nodeToBlock(node, index);
+  }).filter(Boolean) as ArticleBlock[];
   const firstTitle = blocks.find((block): block is Extract<ArticleBlock, { type: "title" }> => block.type === "title");
   const title = firstTitle?.text || previous?.meta.title || "未命名草稿";
 
@@ -44,7 +64,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   }
 
   if (block.type === "heading") {
-    return headingNode(block.text, block.level ?? 2, block);
+    return headingNode(block.text, block.level ?? 1, block);
   }
 
   if (block.type === "paragraph") {
@@ -117,11 +137,15 @@ function blockToNode(block: ArticleBlock): TiptapNode {
 function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
   if (node.type === "heading") {
     const text = inlineText(node).trim();
+    const attrs = node.attrs ?? {};
+    const isTitle =
+      (typeof attrs.blockType === "string" && attrs.blockType === "title") ||
+      (typeof attrs.blockId === "string" && /(?:^|[^a-zA-Z])title(?:[^a-zA-Z]|$)/.test(attrs.blockId));
     return {
-      id: blockIdFromNode(node, node.attrs?.level === 1 ? "title" : "heading", index),
-      type: node.attrs?.level === 1 ? "title" : "heading",
+      id: blockIdFromNode(node, isTitle ? "title" : "heading", index),
+      type: isTitle ? "title" : "heading",
       text,
-      ...(node.attrs?.level === 1 ? {} : { level: headingLevelFromNode(node) }),
+      ...(isTitle ? {} : { level: headingLevelFromNode(node) }),
       style: styleFromNode(node),
       role: roleFromNode(node),
     };
@@ -363,7 +387,7 @@ function createBlockId(type: string, index: number): string {
 
 function blockAttrs(block: ArticleBlock): Record<string, unknown> {
   const style = block.style ?? {};
-  const attrs: Record<string, unknown> = { blockId: block.id };
+  const attrs: Record<string, unknown> = { blockId: block.id, blockType: block.type };
   if (block.role) {
     attrs.blockRole = block.role;
   }
@@ -402,9 +426,9 @@ function styleFromNode(node: TiptapNode): BlockOverride {
   return style;
 }
 
-function headingLevelFromNode(node: TiptapNode): 2 | 3 | 4 {
-  const level = Number(node.attrs?.level ?? 2);
-  return level <= 2 ? 2 : level === 3 ? 3 : 4;
+function headingLevelFromNode(node: TiptapNode): 1 | 2 | 3 {
+  const level = Number(node.attrs?.level ?? 1);
+  return level <= 1 ? 1 : level === 2 ? 2 : 3;
 }
 
 function isBlockOverride(value: unknown): value is BlockOverride {

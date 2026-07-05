@@ -40,7 +40,7 @@ export interface TitleBlock extends BaseBlock {
 export interface HeadingBlock extends BaseBlock {
   type: "heading";
   text: string;
-  level?: 2 | 3 | 4;
+  level?: 1 | 2 | 3;
 }
 
 export interface ParagraphBlock extends BaseBlock {

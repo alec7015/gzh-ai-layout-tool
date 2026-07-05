@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from "@tiptap/react";
 import type { GridImage, GridLayout } from "../domain/types";
-import { readImageFileAsDataUrl } from "../domain/imageAssets";
+import { compressImageFile } from "../domain/imageCompress";
 
 interface ImageGridAttrs {
   images: GridImage[];
@@ -40,7 +40,7 @@ function ImageGridView({ node, updateAttributes, selected }: ReactNodeViewProps)
     const nextImages = await Promise.all(
       Array.from(files)
         .filter((file) => file.type.startsWith("image/"))
-        .map(async (file) => ({ src: await readImageFileAsDataUrl(file), alt: file.name.replace(/\.[^.]+$/, "") }))
+        .map(async (file) => ({ src: await compressImageFile(file), alt: "" }))
     );
     updateAttributes({ images: [...images, ...nextImages] });
   }

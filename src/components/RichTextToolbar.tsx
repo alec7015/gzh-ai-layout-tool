@@ -7,9 +7,9 @@ import {
   AlignRight,
   Bold,
   Eraser,
+  Heading1,
   Heading2,
   Heading3,
-  Heading4,
   Highlighter,
   Indent,
   Italic,
@@ -97,9 +97,6 @@ export function RichTextToolbar({
 
     const applyOnSelection = () => {
       window.setTimeout(() => {
-        if (editor.state.selection.empty) {
-          return;
-        }
         applyPainter(editor, painterSnapshot);
         if (painterMode === "single") {
           setPainterMode(null);
@@ -113,12 +110,19 @@ export function RichTextToolbar({
         setPainterSnapshot(null);
       }
     };
+    const applyOnKeyboardSelection = (event: KeyboardEvent) => {
+      if (event.key === "Shift" && !editor.state.selection.empty) {
+        applyOnSelection();
+      }
+    };
 
     editor.view.dom.addEventListener("mouseup", applyOnSelection);
     document.addEventListener("keydown", clearOnEscape);
+    document.addEventListener("keyup", applyOnKeyboardSelection);
     return () => {
       editor.view.dom.removeEventListener("mouseup", applyOnSelection);
       document.removeEventListener("keydown", clearOnEscape);
+      document.removeEventListener("keyup", applyOnKeyboardSelection);
     };
   }, [editor, painterMode, painterSnapshot]);
 
@@ -137,12 +141,12 @@ export function RichTextToolbar({
     }
 
     const chain = editor.chain().focus();
-    if (value === "heading2") {
+    if (value === "heading1") {
+      chain.setHeading({ level: 1 }).run();
+    } else if (value === "heading2") {
       chain.setHeading({ level: 2 }).run();
     } else if (value === "heading3") {
       chain.setHeading({ level: 3 }).run();
-    } else if (value === "heading4") {
-      chain.setHeading({ level: 4 }).run();
     } else if (value === "quote") {
       chain.toggleBlockquote().run();
     } else if (value === "bullet") {
@@ -178,23 +182,26 @@ export function RichTextToolbar({
       </div>
       <span className="ribbon-divider" />
       <select aria-label="块类型" value={currentBlock} onChange={(event) => setBlockType(event.target.value)}>
+        <option value="title" disabled>
+          文章标题
+        </option>
         <option value="paragraph">正文</option>
+        <option value="heading1">一级标题</option>
         <option value="heading2">二级标题</option>
         <option value="heading3">三级标题</option>
-        <option value="heading4">四级标题</option>
         <option value="quote">引用</option>
         <option value="bullet">无序列表</option>
         <option value="ordered">有序列表</option>
       </select>
       <div className="ribbon-group">
+        <button className={editor?.isActive("heading", { level: 1 }) ? "active" : ""} type="button" title="一级标题" onClick={() => editor?.chain().focus().setHeading({ level: 1 }).run()}>
+          <Heading1 size={16} />
+        </button>
         <button className={editor?.isActive("heading", { level: 2 }) ? "active" : ""} type="button" title="二级标题" onClick={() => editor?.chain().focus().setHeading({ level: 2 }).run()}>
           <Heading2 size={16} />
         </button>
         <button className={editor?.isActive("heading", { level: 3 }) ? "active" : ""} type="button" title="三级标题" onClick={() => editor?.chain().focus().setHeading({ level: 3 }).run()}>
           <Heading3 size={16} />
-        </button>
-        <button className={editor?.isActive("heading", { level: 4 }) ? "active" : ""} type="button" title="四级标题" onClick={() => editor?.chain().focus().setHeading({ level: 4 }).run()}>
-          <Heading4 size={16} />
         </button>
       </div>
       <span className="ribbon-divider" />
@@ -411,14 +418,20 @@ function blockSelectValue(editor: Editor | null) {
   if (!editor) {
     return "paragraph";
   }
+  if (editor.isActive("heading")) {
+    const attrs = editor.getAttributes("heading");
+    if (attrs.blockType === "title" || (typeof attrs.blockId === "string" && attrs.blockId.includes("title"))) {
+      return "title";
+    }
+  }
+  if (editor.isActive("heading", { level: 1 })) {
+    return "heading1";
+  }
   if (editor.isActive("heading", { level: 2 })) {
     return "heading2";
   }
   if (editor.isActive("heading", { level: 3 })) {
     return "heading3";
-  }
-  if (editor.isActive("heading", { level: 4 })) {
-    return "heading4";
   }
   if (editor.isActive("blockquote")) {
     return "quote";

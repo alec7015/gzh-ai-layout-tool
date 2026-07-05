@@ -184,7 +184,7 @@ export function astToMarkdown(article: ArticleAst): string {
         case "title":
           return `# ${block.text}`;
         case "heading":
-          return `${"#".repeat(block.level ?? 2)} ${block.text}`;
+          return `${"#".repeat(block.level ?? 1)} ${block.text}`;
         case "paragraph":
           return runsToMarkdown(block.runs);
         case "quote":
@@ -224,8 +224,17 @@ export function loadDraft(storage: DraftStorage | undefined): ArticleAst {
   }
 }
 
-export function saveDraft(storage: DraftStorage | undefined, article: ArticleAst): void {
-  storage?.setItem(DRAFT_KEY, JSON.stringify(article));
+export function saveDraft(storage: DraftStorage | undefined, article: ArticleAst): boolean {
+  if (!storage) {
+    return true;
+  }
+
+  try {
+    storage.setItem(DRAFT_KEY, JSON.stringify(article));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function flushList(blocks: ArticleBlock[], items: string[], ordered = false): void {
@@ -254,12 +263,12 @@ function stripHeadingMarker(line: string): string {
   return line.replace(/^#{1,6}\s+/, "").trim();
 }
 
-function countHeadingLevel(line: string): 2 | 3 | 4 {
+function countHeadingLevel(line: string): 1 | 2 | 3 {
   const marker = line.match(/^(#{1,6})\s+/)?.[1].length;
   if (!marker) {
-    return 2;
+    return 1;
   }
-  return marker <= 2 ? 2 : marker === 3 ? 3 : 4;
+  return marker <= 1 ? 1 : marker === 2 ? 2 : 3;
 }
 
 function parseRuns(line: string): TextRun[] {

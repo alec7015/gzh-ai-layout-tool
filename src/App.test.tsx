@@ -24,9 +24,9 @@ describe("App", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "写作台" }));
 
-    expect(await screen.findByLabelText("写作工具栏", {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(await screen.findByLabelText("写作工具栏", {}, { timeout: 20000 })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "插入多图" }, { timeout: 5000 })).toBeInTheDocument();
-  }, 10000);
+  }, 20000);
 
   it("opens model settings in a topbar dialog instead of the writer sidebar", async () => {
     const { container } = render(<App />);

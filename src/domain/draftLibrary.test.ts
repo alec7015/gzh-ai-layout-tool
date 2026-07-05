@@ -60,7 +60,7 @@ describe("draftLibrary", () => {
     expect(unchanged).toEqual(deleted);
   });
 
-  it("deduplicates adjacent identical snapshots and keeps the newest twenty versions", () => {
+  it("deduplicates adjacent identical snapshots and keeps the newest twelve versions", () => {
     let library = createDraftLibrary(createSampleArticle());
     library = createVersionSnapshot(library, "重复快照");
     library = createVersionSnapshot(library, "重复快照");
@@ -75,8 +75,46 @@ describe("draftLibrary", () => {
       library = createVersionSnapshot(library, `保存 ${index}`);
     }
 
-    expect(getCurrentDraft(library).versions).toHaveLength(20);
+    expect(getCurrentDraft(library).versions).toHaveLength(12);
     expect(getCurrentDraft(library).versions[0].reason).toBe("保存 24");
+  });
+
+  it("stores image references in snapshots and restores them from the current draft", () => {
+    const imageSrc = `data:image/jpeg;base64,${"a".repeat(1000)}`;
+    let library = createDraftLibrary({
+      ...createSampleArticle(),
+      blocks: [
+        ...createSampleArticle().blocks,
+        { id: "img-1", type: "image", src: imageSrc, caption: "", style: {} },
+      ],
+    });
+
+    library = createVersionSnapshot(library, "含图快照");
+    const snapshotImage = getCurrentDraft(library).versions[0].article.blocks.find(
+      (block) => block.type === "image"
+    );
+
+    expect(snapshotImage?.type === "image" ? snapshotImage.src : "").toBe("ref:img-1");
+
+    const updated = updateCurrentDraftArticle(library, {
+      ...getCurrentDraft(library).article,
+      meta: { title: "改过的标题" },
+    });
+    const restored = restoreVersion(updated, getCurrentDraft(updated).versions[0].id);
+    const restoredImage = getCurrentDraft(restored).article.blocks.find((block) => block.type === "image");
+
+    expect(restoredImage?.type === "image" ? restoredImage.src : "").toBe(imageSrc);
+  });
+
+  it("returns false instead of throwing when storage quota is exceeded", () => {
+    const storage = {
+      getItem: () => null,
+      setItem: () => {
+        throw new DOMException("full", "QuotaExceededError");
+      },
+    };
+
+    expect(saveDraftLibrary(storage, createDraftLibrary(createSampleArticle()))).toBe(false);
   });
 
   it("auto-saving the current draft does not overwrite other drafts", () => {

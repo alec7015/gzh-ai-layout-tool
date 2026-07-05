@@ -95,7 +95,7 @@ function renderTitle(text: string, preset: StylePreset, block: ArticleBlock): st
 }
 
 function renderHeading(text: string, preset: StylePreset, index: number, block: ArticleBlock): string {
-  const level = "level" in block ? block.level ?? 2 : 2;
+  const level = "level" in block ? block.level ?? 1 : 1;
   const variant = preset.components.heading.variant;
   const common = {
     margin: `${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap}`,
@@ -105,19 +105,19 @@ function renderHeading(text: string, preset: StylePreset, index: number, block: 
     "line-height": "1.5",
   };
 
-  if (level === 3 || level === 4) {
-    const tag = level === 3 ? "h3" : "h4";
+  if (level === 2 || level === 3) {
+    const tag = level === 2 ? "h2" : "h3";
     return `<${tag} style="${style({
       ...common,
-      color: level === 3 ? preset.palette.primary : preset.palette.textMain,
-      "font-size": decreasePx(preset.typography.h2Size, level === 3 ? 2 : 4),
-      "font-weight": level === 3 ? "700" : "600",
+      color: level === 2 ? preset.palette.primary : preset.palette.textMain,
+      "font-size": decreasePx(preset.typography.h2Size, level === 2 ? 2 : 4),
+      "font-weight": level === 2 ? "700" : "600",
       ...toInlineOverride(block.style),
     })}">${escapeHtml(text)}</${tag}>`;
   }
 
   if (variant === "chapter-badge") {
-    return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
+    return `<h1 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
       display: "inline-block",
       background: preset.palette.primary,
       color: "#FFFFFF",
@@ -126,39 +126,39 @@ function renderHeading(text: string, preset: StylePreset, index: number, block: 
       "font-weight": "700",
       "font-size": "13px",
       "margin-right": "10px",
-    })}">${String(index).padStart(2, "0")}</span>${escapeHtml(text)}</h2>`;
+    })}">${String(index).padStart(2, "0")}</span>${escapeHtml(text)}</h1>`;
   }
 
   if (variant === "gradient-underline") {
-    return `<h2 style="${style({ ...common, color: preset.palette.primary, ...toInlineOverride(block.style) })}"><span style="${style({
+    return `<h1 style="${style({ ...common, color: preset.palette.primary, ...toInlineOverride(block.style) })}"><span style="${style({
       background: `linear-gradient(transparent 62%, ${preset.palette.primary}33 62%)`,
       padding: "0 3px",
-    })}">${escapeHtml(text)}</span></h2>`;
+    })}">${escapeHtml(text)}</span></h1>`;
   }
 
   if (variant === "block-fill") {
-    return `<h2 style="${style({
+    return `<h1 style="${style({
       ...common,
       color: "#FFFFFF",
       background: preset.palette.primary,
       padding: "6px 12px",
       "border-radius": "6px",
       ...toInlineOverride(block.style),
-    })}">${escapeHtml(text)}</h2>`;
+    })}">${escapeHtml(text)}</h1>`;
   }
 
   if (variant === "center-ornament") {
-    return `<h2 style="${style({
+    return `<h1 style="${style({
       ...common,
       color: preset.palette.primary,
       "text-align": "center",
       "letter-spacing": "2px",
       ...toInlineOverride(block.style),
-    })}">✦ ${escapeHtml(text)} ✦</h2>`;
+    })}">✦ ${escapeHtml(text)} ✦</h1>`;
   }
 
   if (variant === "number-badge") {
-    return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
+    return `<h1 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
       display: "inline-block",
       width: "24px",
       height: "24px",
@@ -169,27 +169,27 @@ function renderHeading(text: string, preset: StylePreset, index: number, block: 
       color: "#FFFFFF",
       "font-size": "13px",
       "margin-right": "8px",
-    })}">${index}</span>${escapeHtml(text)}</h2>`;
+    })}">${index}</span>${escapeHtml(text)}</h1>`;
   }
 
   if (variant === "left-color-bar" || variant === "vertical-line") {
-    return `<h2 style="${style({
+    return `<h1 style="${style({
       ...common,
       padding: "0 0 0 10px",
       "border-left": `4px solid ${preset.palette.primary}`,
       ...toInlineOverride(block.style),
-    })}">${escapeHtml(text)}</h2>`;
+    })}">${escapeHtml(text)}</h1>`;
   }
 
   if (variant === "plain-bold") {
-    return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}">${escapeHtml(text)}</h2>`;
+    return `<h1 style="${style({ ...common, ...toInlineOverride(block.style) })}">${escapeHtml(text)}</h1>`;
   }
 
-  return `<h2 style="${style({
+  return `<h1 style="${style({
     ...common,
     color: preset.palette.primary,
     ...toInlineOverride(block.style),
-  })}">${escapeHtml(text)}</h2>`;
+  })}">${escapeHtml(text)}</h1>`;
 }
 
 function renderParagraph(
@@ -417,6 +417,7 @@ function renderImage(
   preset: StylePreset,
   block: ArticleBlock
 ): string {
+  const normalizedCaption = caption?.trim();
   return `<section style="${style({ margin: `${preset.rhythm.sectionGap} 0`, ...toInlineOverride(block.style) })}"><img src="${escapeAttr(
     src
   )}" style="${style({
@@ -424,13 +425,13 @@ function renderImage(
     width: "100%",
     "border-radius": preset.components.image.variant.includes("plain") ? "0" : "8px",
   })}" />${
-    caption
+    normalizedCaption
       ? `<p style="${style({
           margin: "8px 0 0",
           color: preset.palette.textSub,
           "font-size": "12px",
           "text-align": "center",
-        })}">${escapeHtml(caption)}</p>`
+        })}">${escapeHtml(normalizedCaption)}</p>`
       : ""
   }</section>`;
 }
@@ -583,7 +584,7 @@ function renderRun(run: TextRun, preset: StylePreset): string {
     }
 
     if (mark === "italic") {
-      const markStyle: Record<string, string> = {};
+      const markStyle: Record<string, string> = { "font-style": "italic" };
       if (!run.attrs?.color) {
         markStyle.color = preset.palette.textSub;
       }

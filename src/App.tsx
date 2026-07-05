@@ -39,11 +39,13 @@ import {
 import {
   createDraft,
   createVersionSnapshot,
+  clearAllVersionHistory,
   deleteDraft,
   deleteVersion,
   getCurrentDraft,
   loadDraftLibrary,
   restoreVersion,
+  resetDrafts,
   saveDraftLibrary,
   selectDraft,
   updateCurrentDraftArticle,
@@ -109,6 +111,7 @@ export default function App() {
   );
   const [busy, setBusy] = useState<BusyState>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const storageErrorShownRef = useRef(false);
   const layoutScreenRef = useRef<HTMLElement | null>(null);
   const getMaxPreviewWidth = useCallback(() => {
     const totalWidth = Math.max(
@@ -144,9 +147,23 @@ export default function App() {
   );
   const activeArticle = workspace === "layout" && layoutArticle ? layoutArticle : article;
   const wordCount = useMemo(() => astToPlainText(activeArticle).replace(/\s/g, "").length, [activeArticle]);
+  const storageUsage = useMemo(
+    () => ({
+      drafts: byteLength(JSON.stringify(draftLibrary)),
+      styles: byteLength(JSON.stringify(customStyles)),
+      settings: byteLength(JSON.stringify(aiSettings)),
+      total:
+        byteLength(JSON.stringify(draftLibrary)) +
+        byteLength(JSON.stringify(customStyles)) +
+        byteLength(JSON.stringify(aiSettings)),
+    }),
+    [aiSettings, customStyles, draftLibrary]
+  );
 
   useEffect(() => {
-    saveDraft(storage, article);
+    if (!saveDraft(storage, article)) {
+      reportStorageFailure();
+    }
     setDraftLibrary((current) => updateCurrentDraftArticle(current, article));
   }, [article]);
 
@@ -155,7 +172,9 @@ export default function App() {
   }, [layoutArticle]);
 
   useEffect(() => {
-    saveDraftLibrary(storage, draftLibrary);
+    if (!saveDraftLibrary(storage, draftLibrary)) {
+      reportStorageFailure();
+    }
   }, [draftLibrary]);
 
   useEffect(() => {
@@ -179,6 +198,16 @@ export default function App() {
 
   function handleArticleChange(nextArticle: ArticleAst) {
     setArticle(nextArticle);
+  }
+
+  function reportStorageFailure() {
+    if (storageErrorShownRef.current) {
+      return;
+    }
+    storageErrorShownRef.current = true;
+    setFeedback(
+      createFeedback("error", "本地存储已满，本次改动未能保存——请到 设置→存储管理 清理。")
+    );
   }
 
   function openArticle(nextArticle: ArticleAst) {
@@ -233,6 +262,37 @@ export default function App() {
   function removeDraftVersion(versionId: string) {
     setDraftLibrary((current) => deleteVersion(current, versionId));
     setFeedback(createFeedback("success", "已删除历史版本。"));
+  }
+
+  function clearVersionHistory() {
+    setDraftLibrary((current) => clearAllVersionHistory(current));
+    setFeedback(createFeedback("success", "已清空所有版本历史。"));
+  }
+
+  function deleteAllDrafts() {
+    if (!window.confirm("确认删除全部草稿？此操作不可撤销。")) {
+      return;
+    }
+    const library = resetDrafts(createSampleArticle());
+    setDraftLibrary(library);
+    openDraftFromLibrary(library);
+    setFeedback(createFeedback("success", "已删除全部草稿，并创建空白示例草稿。"));
+  }
+
+  function resetLocalData() {
+    if (window.prompt("输入“重置”以确认清空草稿、版本、模型设置和本地版式。") !== "重置") {
+      return;
+    }
+    storage?.clear();
+    const library = resetDrafts(createSampleArticle());
+    setDraftLibrary(library);
+    openDraftFromLibrary(library);
+    setAiSettings(loadAiSettings(storage));
+    setCustomStyles([]);
+    setUserOverrides({});
+    setSelectedStyleId(defaultStylePreset.id);
+    setSettingsOpen(false);
+    setFeedback(createFeedback("success", "已重置全部本地数据。"));
   }
 
   function copyToLayout() {
@@ -531,6 +591,10 @@ export default function App() {
     footerText?: string;
     autoPalette?: boolean;
     firstLineIndent?: string;
+    headingVariant?: string;
+    quoteVariant?: string;
+    listVariant?: string;
+    dividerVariant?: string;
   }) {
     if (next.themeColor !== undefined) {
       setThemeColor(next.themeColor);
@@ -551,6 +615,30 @@ export default function App() {
       setUserOverrides((current) => ({
         ...current,
         "rhythm.firstLineIndent": next.firstLineIndent || null,
+      }));
+    }
+    if (next.headingVariant !== undefined) {
+      setUserOverrides((current) => ({
+        ...current,
+        "components.heading.variant": next.headingVariant || null,
+      }));
+    }
+    if (next.quoteVariant !== undefined) {
+      setUserOverrides((current) => ({
+        ...current,
+        "components.quote.variant": next.quoteVariant || null,
+      }));
+    }
+    if (next.listVariant !== undefined) {
+      setUserOverrides((current) => ({
+        ...current,
+        "components.list.variant": next.listVariant || null,
+      }));
+    }
+    if (next.dividerVariant !== undefined) {
+      setUserOverrides((current) => ({
+        ...current,
+        "components.divider.variant": next.dividerVariant || null,
       }));
     }
   }
@@ -628,9 +716,13 @@ export default function App() {
           settings={aiSettings}
           testing={settingsTesting}
           testMessage={settingsTestMessage}
+          storageUsage={storageUsage}
           onChange={(next) => updateAiSettings(next)}
           onClose={() => setSettingsOpen(false)}
           onTest={() => void testModelConnection()}
+          onClearVersions={clearVersionHistory}
+          onDeleteDrafts={deleteAllDrafts}
+          onResetLocalData={resetLocalData}
         />
       ) : null}
 
@@ -876,6 +968,10 @@ export default function App() {
                       footerText: String(mergedPreset.decorations.footerText ?? ""),
                       autoPalette,
                       firstLineIndent: String(mergedPreset.rhythm.firstLineIndent ?? ""),
+                      headingVariant: String(userOverrides["components.heading.variant"] ?? ""),
+                      quoteVariant: String(userOverrides["components.quote.variant"] ?? ""),
+                      listVariant: String(userOverrides["components.list.variant"] ?? ""),
+                      dividerVariant: String(userOverrides["components.divider.variant"] ?? ""),
                     }}
                     onSettingsChange={updateLayoutSettings}
                   />
@@ -949,4 +1045,8 @@ function hasVisualFormatting(article: ArticleAst): boolean {
         )
     );
   });
+}
+
+function byteLength(value: string): number {
+  return new Blob([value]).size;
 }

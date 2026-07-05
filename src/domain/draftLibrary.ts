@@ -2,7 +2,8 @@ import type { ArticleAst } from "./types";
 import { createSampleArticle } from "./draftStore";
 
 const DRAFT_LIBRARY_KEY = "gzh-draft-library";
-const MAX_VERSIONS = 20;
+const MAX_VERSIONS = 12;
+const IMAGE_REF_PREFIX = "ref:";
 
 export interface DraftLibraryStorage {
   getItem(key: string): string | null;
@@ -28,7 +29,10 @@ export interface DraftRecord {
 export interface DraftLibrary {
   currentDraftId: string;
   drafts: DraftRecord[];
+  schemaVersion?: number;
 }
+
+const DRAFT_SCHEMA_VERSION = 2;
 
 export function createDraftLibrary(article: ArticleAst = createSampleArticle()): DraftLibrary {
   const draft = createDraftRecord(article);
@@ -53,7 +57,7 @@ export function loadDraftLibrary(storage: DraftLibraryStorage | undefined): Draf
     if (!parsed.drafts?.length || !parsed.currentDraftId) {
       return createDraftLibrary();
     }
-    return {
+    const library = {
       ...parsed,
       drafts: parsed.drafts.map((draft) => ({
         ...draft,
@@ -61,6 +65,16 @@ export function loadDraftLibrary(storage: DraftLibraryStorage | undefined): Draf
         versions: draft.versions ?? [],
       })),
     };
+    if ((library.schemaVersion ?? 1) < DRAFT_SCHEMA_VERSION) {
+      library.drafts = library.drafts.map((draft) => ({
+        ...draft,
+        article: migrateHeadingLevels(draft.article),
+        layoutArticle: draft.layoutArticle ? migrateHeadingLevels(draft.layoutArticle) : draft.layoutArticle,
+        versions: draft.versions.map((v) => ({ ...v, article: migrateHeadingLevels(v.article) })),
+      }));
+      library.schemaVersion = DRAFT_SCHEMA_VERSION;
+    }
+    return library;
   } catch {
     return createDraftLibrary();
   }
@@ -69,8 +83,17 @@ export function loadDraftLibrary(storage: DraftLibraryStorage | undefined): Draf
 export function saveDraftLibrary(
   storage: DraftLibraryStorage | undefined,
   library: DraftLibrary
-): void {
-  storage?.setItem(DRAFT_LIBRARY_KEY, JSON.stringify(library));
+): boolean {
+  if (!storage) {
+    return true;
+  }
+
+  try {
+    storage.setItem(DRAFT_LIBRARY_KEY, JSON.stringify(library));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function getCurrentDraft(library: DraftLibrary): DraftRecord {
@@ -158,7 +181,8 @@ export function createVersionSnapshot(
 ): DraftLibrary {
   const current = getCurrentDraft(library);
   const latestVersion = current.versions[0];
-  if (latestVersion && JSON.stringify(latestVersion.article) === JSON.stringify(current.article)) {
+  const snapshotArticle = slimArticleImages(current.article);
+  if (latestVersion && JSON.stringify(latestVersion.article) === JSON.stringify(snapshotArticle)) {
     return library;
   }
 
@@ -166,7 +190,7 @@ export function createVersionSnapshot(
     id: createId("version"),
     reason,
     createdAt: new Date().toISOString(),
-    article: current.article,
+    article: snapshotArticle,
   };
 
   return {
@@ -203,7 +227,18 @@ export function restoreVersion(library: DraftLibrary, versionId: string): DraftL
     return library;
   }
 
-  return updateCurrentDraftArticle(library, version.article);
+  return updateCurrentDraftArticle(library, restoreArticleImages(version.article, current));
+}
+
+export function clearAllVersionHistory(library: DraftLibrary): DraftLibrary {
+  return {
+    ...library,
+    drafts: library.drafts.map((draft) => ({ ...draft, versions: [] })),
+  };
+}
+
+export function resetDrafts(article: ArticleAst = createSampleArticle()): DraftLibrary {
+  return createDraftLibrary(article);
 }
 
 function createDraftRecord(article: ArticleAst): DraftRecord {
@@ -217,6 +252,98 @@ function createDraftRecord(article: ArticleAst): DraftRecord {
   };
 }
 
+function migrateHeadingLevels(article: ArticleAst): ArticleAst {
+  return {
+    ...article,
+    blocks: article.blocks.map((block) =>
+      block.type === "heading" && typeof block.level === "number"
+        ? { ...block, level: Math.max(1, Math.min(3, block.level - 1)) as 1 | 2 | 3 }
+        : block
+    ),
+  };
+}
+
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function slimArticleImages(article: ArticleAst): ArticleAst {
+  return {
+    ...article,
+    blocks: article.blocks.map((block) => {
+      if (block.type === "image") {
+        return { ...block, src: imageRef(block.id) };
+      }
+      if (block.type === "imageGrid") {
+        return {
+          ...block,
+          images: block.images.map((image, index) => ({
+            ...image,
+            src: imageRef(`${block.id}:${index}`),
+          })),
+        };
+      }
+      return block;
+    }),
+  };
+}
+
+function restoreArticleImages(article: ArticleAst, current: DraftRecord): ArticleAst {
+  const lookup = collectImageSources(current);
+  return {
+    ...article,
+    blocks: article.blocks.map((block) => {
+      if (block.type === "image" && isImageRef(block.src)) {
+        return { ...block, src: lookup.get(refId(block.src)) ?? missingImagePlaceholder() };
+      }
+      if (block.type === "imageGrid") {
+        return {
+          ...block,
+          images: block.images.map((image) =>
+            isImageRef(image.src)
+              ? { ...image, src: lookup.get(refId(image.src)) ?? missingImagePlaceholder() }
+              : image
+          ),
+        };
+      }
+      return block;
+    }),
+  };
+}
+
+function collectImageSources(current: DraftRecord): Map<string, string> {
+  const lookup = new Map<string, string>();
+  [current.article, current.layoutArticle, ...current.versions.map((version) => version.article)]
+    .filter((article): article is ArticleAst => Boolean(article))
+    .forEach((article) => {
+      article.blocks.forEach((block) => {
+        if (block.type === "image" && !isImageRef(block.src)) {
+          lookup.set(block.id, block.src);
+        }
+        if (block.type === "imageGrid") {
+          block.images.forEach((image, index) => {
+            if (!isImageRef(image.src)) {
+              lookup.set(`${block.id}:${index}`, image.src);
+            }
+          });
+        }
+      });
+    });
+  return lookup;
+}
+
+function imageRef(id: string): string {
+  return `${IMAGE_REF_PREFIX}${id}`;
+}
+
+function isImageRef(src: string): boolean {
+  return src.startsWith(IMAGE_REF_PREFIX);
+}
+
+function refId(src: string): string {
+  return src.slice(IMAGE_REF_PREFIX.length);
+}
+
+function missingImagePlaceholder(): string {
+  return "data:image/gif;base64,R0lGODlhAQABAPAAAP///8zMzCwAAAAAAQABAAACAkQBADs=";
 }

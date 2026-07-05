@@ -26,14 +26,14 @@ ${scope} {
   letter-spacing: ${preset.typography.letterSpacing};
   text-align: ${preset.rhythm.align};
 }
-${scope} h1 {
+${scope} h1[data-block-type="title"] {
   margin: 0 0 ${preset.rhythm.sectionGap};
   color: ${preset.palette.textMain};
   font-size: ${preset.typography.titleSize};
   line-height: 1.35;
   font-weight: 800;
 }
-${scope} h2 {
+${scope} h1:not([data-block-type="title"]) {
   margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
   color: ${preset.palette.primary};
   font-size: ${preset.typography.h2Size};
@@ -43,14 +43,14 @@ ${scope} h2 {
   padding-left: 10px;
   ${headingBlock}
 }
-${scope} h3 {
+${scope} h2 {
   margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
   color: ${preset.palette.primary};
   font-size: ${decreasePx(preset.typography.h2Size, 2)};
   line-height: 1.45;
   font-weight: 700;
 }
-${scope} h4 {
+${scope} h3 {
   margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
   color: ${preset.palette.textMain};
   font-size: ${decreasePx(preset.typography.h2Size, 4)};
@@ -92,7 +92,7 @@ ${scope} td {
   padding: 8px 10px;
 }
 ${scope} th {
-  background: ${preset.palette.secondary};
+  background: ${preset.palette.primary}14;
   color: ${preset.palette.textMain};
 }
 ${scope} hr {

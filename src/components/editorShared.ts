@@ -63,8 +63,20 @@ export function findCurrentBlock(editor: Editor | null): CurrentBlock | null {
   return null;
 }
 
+export function findTopBlock(editor: Editor | null): CurrentBlock | null {
+  if (!editor) {
+    return null;
+  }
+
+  const { $from } = editor.state.selection;
+  if ($from.depth < 1) {
+    return null;
+  }
+  return { node: $from.node(1), pos: $from.before(1) };
+}
+
 export function getBlockStyle(editor: Editor | null): Record<string, string> {
-  const block = findCurrentBlock(editor);
+  const block = findTopBlock(editor);
   const style = block?.node.attrs.blockStyle;
   if (!style || typeof style !== "object" || Array.isArray(style)) {
     return {};
@@ -81,7 +93,7 @@ export function getBlockStyleValue(editor: Editor | null, key: string) {
 }
 
 export function setBlockStyleAttr(editor: Editor | null, key: string, value: string | null) {
-  const block = findCurrentBlock(editor);
+  const block = findTopBlock(editor);
   if (!editor || !block) {
     return;
   }
@@ -103,7 +115,7 @@ export function setBlockStyleAttr(editor: Editor | null, key: string, value: str
 }
 
 export function clearBlockRoleAttr(editor: Editor | null) {
-  const block = findCurrentBlock(editor);
+  const block = findTopBlock(editor);
   if (!editor || !block) {
     return;
   }
@@ -153,36 +165,44 @@ export function capturePainter(editor: Editor | null): PainterSnapshot | null {
 }
 
 export function applyPainter(editor: Editor | null, snapshot: PainterSnapshot | null) {
-  const block = findCurrentBlock(editor);
-  if (!editor || !snapshot || !block) {
+  if (!editor || !snapshot) {
     return;
   }
 
-  let chain = editor.chain().focus().unsetAllMarks();
-  if (snapshot.marks.bold) {
-    chain = chain.toggleBold();
+  if (!editor.state.selection.empty) {
+    let chain = editor.chain().focus().unsetAllMarks();
+    if (snapshot.marks.bold) {
+      chain = chain.toggleBold();
+    }
+    if (snapshot.marks.italic) {
+      chain = chain.toggleItalic();
+    }
+    if (snapshot.marks.underline) {
+      chain = chain.toggleUnderline();
+    }
+    if (snapshot.marks.strike) {
+      chain = chain.toggleStrike();
+    }
+    const textStyleAttrs = Object.fromEntries(
+      Object.entries(snapshot.textStyle).filter(([, value]) => Boolean(value))
+    );
+    if (Object.keys(textStyleAttrs).length > 0) {
+      chain = chain.setMark("textStyle", textStyleAttrs);
+    }
+    chain.run();
   }
-  if (snapshot.marks.italic) {
-    chain = chain.toggleItalic();
-  }
-  if (snapshot.marks.underline) {
-    chain = chain.toggleUnderline();
-  }
-  if (snapshot.marks.strike) {
-    chain = chain.toggleStrike();
-  }
-  const textStyleAttrs = Object.fromEntries(
-    Object.entries(snapshot.textStyle).filter(([, value]) => Boolean(value))
-  );
-  if (Object.keys(textStyleAttrs).length > 0) {
-    chain = chain.setMark("textStyle", textStyleAttrs);
-  }
-  chain.run();
 
   if (snapshot.textAlign) {
-    editor.chain().focus().setTextAlign(snapshot.textAlign).run();
+    const alignChain = editor.chain().focus();
+    if (typeof alignChain.setTextAlign === "function") {
+      alignChain.setTextAlign(snapshot.textAlign).run();
+    }
   }
 
+  const block = findTopBlock(editor);
+  if (!block || !("blockStyle" in block.node.attrs)) {
+    return;
+  }
   const nextStyle = applyPainterToStyle(getBlockStyle(editor), snapshot);
   editor.view.dispatch(
     editor.state.tr.setNodeAttribute(

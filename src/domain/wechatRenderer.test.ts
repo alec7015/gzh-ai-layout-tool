@@ -55,4 +55,26 @@ describe("wechatRenderer", () => {
     expect(html).toContain("首段引言");
     expect(html).toContain("background:#fff7ed");
   });
+
+  it("does not render empty image captions and emits explicit italic style", () => {
+    const html = renderWechatHtml(
+      {
+        meta: { title: "图片与斜体" },
+        blocks: [
+          { id: "title-1", type: "title", text: "图片与斜体", style: {} },
+          {
+            id: "p-1",
+            type: "paragraph",
+            runs: [{ text: "斜体文字", marks: ["italic"] }],
+            style: {},
+          },
+          { id: "img-1", type: "image", src: "data:image/jpeg;base64,abc", caption: "   ", style: {} },
+        ],
+      },
+      defaultStylePreset
+    );
+
+    expect(html).toContain("font-style:italic");
+    expect(html).not.toContain("<p style=\"margin:8px 0 0");
+  });
 });

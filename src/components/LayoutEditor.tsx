@@ -13,6 +13,7 @@ import { RichTextToolbar } from "./RichTextToolbar";
 import { usePopoverDismiss } from "./editorShared";
 import { astToTiptapDoc, tiptapDocToAst, type TiptapDoc } from "../domain/tiptapAdapter";
 import { presetToEditorCss } from "../domain/presetToEditorCss";
+import { VARIANT_LABELS, VARIANT_VOCABULARY } from "../domain/stylePresets";
 import type { ArticleAst, StylePreset } from "../domain/types";
 
 interface LayoutEditorProps {
@@ -29,6 +30,10 @@ interface LayoutEditorProps {
     footerText: string;
     autoPalette: boolean;
     firstLineIndent: string;
+    headingVariant: string;
+    quoteVariant: string;
+    listVariant: string;
+    dividerVariant: string;
   };
   onSettingsChange(next: Partial<LayoutEditorProps["settings"]>): void;
 }
@@ -140,6 +145,34 @@ export default function LayoutEditor({
                   />
                   正文首行缩进 2 字符
                 </label>
+                <VariantSelect
+                  label="小标题样式"
+                  value={settings.headingVariant}
+                  variants={VARIANT_VOCABULARY.heading}
+                  labels={VARIANT_LABELS.heading}
+                  onChange={(headingVariant) => onSettingsChange({ headingVariant })}
+                />
+                <VariantSelect
+                  label="引用样式"
+                  value={settings.quoteVariant}
+                  variants={VARIANT_VOCABULARY.quote}
+                  labels={VARIANT_LABELS.quote}
+                  onChange={(quoteVariant) => onSettingsChange({ quoteVariant })}
+                />
+                <VariantSelect
+                  label="列表样式"
+                  value={settings.listVariant}
+                  variants={VARIANT_VOCABULARY.list}
+                  labels={VARIANT_LABELS.list}
+                  onChange={(listVariant) => onSettingsChange({ listVariant })}
+                />
+                <VariantSelect
+                  label="分隔线样式"
+                  value={settings.dividerVariant}
+                  variants={VARIANT_VOCABULARY.divider}
+                  labels={VARIANT_LABELS.divider}
+                  onChange={(dividerVariant) => onSettingsChange({ dividerVariant })}
+                />
                 <label>
                   文末引导语
                   <textarea rows={3} value={settings.footerText} onChange={(event) => onSettingsChange({ footerText: event.target.value })} />
@@ -157,5 +190,33 @@ export default function LayoutEditor({
         <EditorContent editor={editor} />
       </div>
     </div>
+  );
+}
+
+function VariantSelect<T extends string>({
+  label,
+  value,
+  variants,
+  labels,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  variants: readonly T[];
+  labels: Record<T, string>;
+  onChange(value: string): void;
+}) {
+  return (
+    <label>
+      {label}
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">跟随版式</option>
+        {variants.map((variant) => (
+          <option key={variant} value={variant}>
+            {labels[variant]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

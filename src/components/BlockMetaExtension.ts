@@ -39,6 +39,15 @@ export const BlockMeta = Extension.create({
               return style ? { style } : {};
             },
           },
+          blockType: {
+            default: null,
+            parseHTML: () => null,
+            renderHTML: (attrs) => {
+              return typeof attrs.blockType === "string"
+                ? { "data-block-type": attrs.blockType }
+                : {};
+            },
+          },
           blockRole: {
             default: null,
             parseHTML: (element) => element.getAttribute("data-block-role"),

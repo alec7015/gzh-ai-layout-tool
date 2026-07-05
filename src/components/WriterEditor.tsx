@@ -12,7 +12,8 @@ import { BlockMeta } from "./BlockMetaExtension";
 import { ImageGrid } from "./ImageGridExtension";
 import { RichTextToolbar } from "./RichTextToolbar";
 import { htmlToCleanArticle } from "../domain/magicPaste";
-import { isSupportedImageFile, readImageFileAsDataUrl } from "../domain/imageAssets";
+import { isSupportedImageFile } from "../domain/imageAssets";
+import { compressImageFile } from "../domain/imageCompress";
 import {
   astToTiptapDoc,
   tiptapDocToAst,
@@ -128,11 +129,11 @@ export default function WriterEditor({
       return;
     }
 
-    const src = await readImageFileAsDataUrl(file);
+    const src = await compressImageFile(file);
     editor
       .chain()
       .focus()
-      .setImage({ src, alt: file.name.replace(/\.[^.]+$/, "") })
+      .setImage({ src, alt: "" })
       .run();
   }
 

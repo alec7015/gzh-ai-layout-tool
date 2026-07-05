@@ -95,6 +95,7 @@ function renderTitle(text: string, preset: StylePreset, block: ArticleBlock): st
 }
 
 function renderHeading(text: string, preset: StylePreset, index: number, block: ArticleBlock): string {
+  const level = "level" in block ? block.level ?? 2 : 2;
   const variant = preset.components.heading.variant;
   const common = {
     margin: `${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap}`,
@@ -103,6 +104,17 @@ function renderHeading(text: string, preset: StylePreset, index: number, block: 
     "font-weight": "700",
     "line-height": "1.5",
   };
+
+  if (level === 3 || level === 4) {
+    const tag = level === 3 ? "h3" : "h4";
+    return `<${tag} style="${style({
+      ...common,
+      color: level === 3 ? preset.palette.primary : preset.palette.textMain,
+      "font-size": decreasePx(preset.typography.h2Size, level === 3 ? 2 : 4),
+      "font-weight": level === 3 ? "700" : "600",
+      ...toInlineOverride(block.style),
+    })}">${escapeHtml(text)}</${tag}>`;
+  }
 
   if (variant === "chapter-badge") {
     return `<h2 style="${style({ ...common, ...toInlineOverride(block.style) })}"><span style="${style({
@@ -549,6 +561,9 @@ function renderRun(run: TextRun, preset: StylePreset): string {
     if (run.attrs.fontSize) {
       attrsStyle["font-size"] = run.attrs.fontSize;
     }
+    if (run.attrs.fontFamily) {
+      attrsStyle["font-family"] = run.attrs.fontFamily;
+    }
     if (Object.keys(attrsStyle).length > 0) {
       content = `<span style="${style(attrsStyle)}">${content}</span>`;
     }
@@ -605,6 +620,7 @@ function paragraphStyle(preset: StylePreset, block: ArticleBlock): string {
     "font-size": preset.typography.bodySize,
     "line-height": String(preset.typography.lineHeight),
     "text-align": preset.rhythm.align,
+    "text-indent": preset.rhythm.firstLineIndent ?? "",
     ...toInlineOverride(block.style),
   });
 }
@@ -631,4 +647,9 @@ function escapeAttr(value: string): string {
 function increasePx(value: string, amount: number) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? `${parsed + amount}px` : value;
+}
+
+function decreasePx(value: string, amount: number) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? `${Math.max(12, parsed - amount)}px` : value;
 }

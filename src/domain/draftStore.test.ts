@@ -127,4 +127,18 @@ describe("draftStore", () => {
     expect(strict.blocks[1]).toMatchObject({ type: "paragraph" });
     expect(loose.blocks[1]).toMatchObject({ type: "heading" });
   });
+
+  it("preserves markdown heading levels from ## to ####", () => {
+    const restored = markdownToAst("# 主标题\n\n## 一级标题\n\n### 二级标题\n\n#### 三级标题", {
+      strictHeadings: true,
+    });
+    const markdown = astToMarkdown(restored);
+
+    expect(restored.blocks[1]).toMatchObject({ type: "heading", level: 2, text: "一级标题" });
+    expect(restored.blocks[2]).toMatchObject({ type: "heading", level: 3, text: "二级标题" });
+    expect(restored.blocks[3]).toMatchObject({ type: "heading", level: 4, text: "三级标题" });
+    expect(markdown).toContain("## 一级标题");
+    expect(markdown).toContain("### 二级标题");
+    expect(markdown).toContain("#### 三级标题");
+  });
 });

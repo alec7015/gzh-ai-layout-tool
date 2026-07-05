@@ -44,7 +44,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
   }
 
   if (block.type === "heading") {
-    return headingNode(block.text, 2, block);
+    return headingNode(block.text, block.level ?? 2, block);
   }
 
   if (block.type === "paragraph") {
@@ -75,9 +75,12 @@ function blockToNode(block: ArticleBlock): TiptapNode {
 
   if (block.type === "image") {
     return {
-      type: "paragraph",
-      attrs: blockAttrs(block),
-      content: [{ type: "text", text: `![${block.caption ?? "配图"}](${block.src})` }],
+      type: "image",
+      attrs: {
+        ...blockAttrs(block),
+        src: block.src,
+        alt: block.caption ?? "配图",
+      },
     };
   }
 
@@ -118,6 +121,18 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       id: blockIdFromNode(node, node.attrs?.level === 1 ? "title" : "heading", index),
       type: node.attrs?.level === 1 ? "title" : "heading",
       text,
+      ...(node.attrs?.level === 1 ? {} : { level: headingLevelFromNode(node) }),
+      style: styleFromNode(node),
+      role: roleFromNode(node),
+    };
+  }
+
+  if (node.type === "image") {
+    return {
+      id: blockIdFromNode(node, "image", index),
+      type: "image",
+      src: typeof node.attrs?.src === "string" ? node.attrs.src : "",
+      caption: typeof node.attrs?.alt === "string" ? node.attrs.alt : "配图",
       style: styleFromNode(node),
       role: roleFromNode(node),
     };
@@ -238,6 +253,7 @@ function runMarksToTiptap(run: TextRun): TiptapNode["marks"] {
         color: run.attrs.color,
         backgroundColor: run.attrs.background,
         fontSize: run.attrs.fontSize,
+        fontFamily: run.attrs.fontFamily,
       },
     });
   }
@@ -316,6 +332,7 @@ function collectRuns(node: TiptapNode, runs: TextRun[]): void {
       color: typeof textStyle.color === "string" ? textStyle.color : undefined,
       background: typeof textStyle.backgroundColor === "string" ? textStyle.backgroundColor : undefined,
       fontSize: typeof textStyle.fontSize === "string" ? textStyle.fontSize : undefined,
+      fontFamily: typeof textStyle.fontFamily === "string" ? textStyle.fontFamily : undefined,
     };
     runs.push({
       text: node.text,
@@ -383,6 +400,11 @@ function styleFromNode(node: TiptapNode): BlockOverride {
     style["text-align"] = node.attrs.textAlign;
   }
   return style;
+}
+
+function headingLevelFromNode(node: TiptapNode): 2 | 3 | 4 {
+  const level = Number(node.attrs?.level ?? 2);
+  return level <= 2 ? 2 : level === 3 ? 3 : 4;
 }
 
 function isBlockOverride(value: unknown): value is BlockOverride {

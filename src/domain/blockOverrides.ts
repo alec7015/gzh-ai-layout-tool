@@ -77,7 +77,16 @@ export function toInlineOverride(style: BlockOverride | undefined): Record<strin
     return {};
   }
 
-  const allowedKeys = ["color", "background", "text-align", "font-size", "margin-bottom"];
+  const allowedKeys = [
+    "color",
+    "background",
+    "text-align",
+    "font-size",
+    "font-family",
+    "line-height",
+    "margin-bottom",
+    "text-indent",
+  ];
   return Object.fromEntries(
     Object.entries(style)
       .filter(([key, value]) => allowedKeys.includes(key) && value !== null)

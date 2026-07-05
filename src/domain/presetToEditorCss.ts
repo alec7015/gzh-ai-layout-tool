@@ -43,8 +43,27 @@ ${scope} h2 {
   padding-left: 10px;
   ${headingBlock}
 }
+${scope} h3 {
+  margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
+  color: ${preset.palette.primary};
+  font-size: ${decreasePx(preset.typography.h2Size, 2)};
+  line-height: 1.45;
+  font-weight: 700;
+}
+${scope} h4 {
+  margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
+  color: ${preset.palette.textMain};
+  font-size: ${decreasePx(preset.typography.h2Size, 4)};
+  line-height: 1.45;
+  font-weight: 600;
+}
 ${scope} p {
   margin: 0 0 ${preset.rhythm.paragraphGap};
+  text-indent: ${preset.rhythm.firstLineIndent ?? "0"};
+}
+${scope} img {
+  max-width: 100%;
+  height: auto;
 }
 ${scope} blockquote {
   margin: ${preset.rhythm.paragraphGap} 0;
@@ -103,4 +122,9 @@ ${scope} [data-block-role="steps"] {
   background: ${preset.palette.secondary};
 }
 `;
+}
+
+function decreasePx(value: string, amount: number) {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? `${Math.max(12, parsed - amount)}px` : value;
 }

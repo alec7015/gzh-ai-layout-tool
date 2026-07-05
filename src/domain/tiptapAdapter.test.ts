@@ -74,6 +74,60 @@ describe("tiptapAdapter", () => {
     expect(JSON.stringify(doc)).not.toContain('"text":""');
   });
 
+  it("round trips single image blocks as image nodes", () => {
+    const article: ArticleAst = {
+      meta: { title: "单图" },
+      blocks: [
+        { id: "title-1", type: "title", text: "单图", style: {} },
+        {
+          id: "image-1",
+          type: "image",
+          src: "data:image/png;base64,abc",
+          caption: "配图说明",
+          style: { "text-align": "center" },
+        },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1]).toMatchObject({
+      type: "image",
+      attrs: {
+        src: "data:image/png;base64,abc",
+        alt: "配图说明",
+        blockId: "image-1",
+        blockStyle: { "text-align": "center" },
+      },
+    });
+    expect(restored.blocks[1]).toMatchObject(article.blocks[1]);
+  });
+
+  it("keeps old markdown image paragraphs readable", () => {
+    const restored = tiptapDocToAst(
+      {
+        type: "doc",
+        content: [
+          { type: "heading", attrs: { level: 1, blockId: "title-1" }, content: [{ type: "text", text: "旧图" }] },
+          {
+            type: "paragraph",
+            attrs: { blockId: "old-image" },
+            content: [{ type: "text", text: "![旧说明](data:image/png;base64,old)" }],
+          },
+        ],
+      },
+      { meta: { title: "旧图" }, blocks: [] }
+    );
+
+    expect(restored.blocks[1]).toMatchObject({
+      id: "old-image",
+      type: "image",
+      src: "data:image/png;base64,old",
+      caption: "旧说明",
+    });
+  });
+
   it("does not emit empty text nodes for blank quotes, list items, or table cells", () => {
     const article: ArticleAst = {
       meta: { title: "空节点" },

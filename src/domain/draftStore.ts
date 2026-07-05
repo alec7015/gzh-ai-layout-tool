@@ -125,7 +125,13 @@ export function markdownToAst(input: string, options: MarkdownParseOptions = {})
     }
 
     if (line.startsWith("#") || (!options.strictHeadings && isHeadingLine(line, index))) {
-      blocks.push({ id: createBlockId("heading", index), type: "heading", text: stripHeadingMarker(line), style: {} });
+      blocks.push({
+        id: createBlockId("heading", index),
+        type: "heading",
+        text: stripHeadingMarker(line),
+        level: countHeadingLevel(line),
+        style: {},
+      });
       continue;
     }
 
@@ -178,7 +184,7 @@ export function astToMarkdown(article: ArticleAst): string {
         case "title":
           return `# ${block.text}`;
         case "heading":
-          return `## ${block.text}`;
+          return `${"#".repeat(block.level ?? 2)} ${block.text}`;
         case "paragraph":
           return runsToMarkdown(block.runs);
         case "quote":
@@ -246,6 +252,14 @@ function createBlockId(type: string, index: number): string {
 
 function stripHeadingMarker(line: string): string {
   return line.replace(/^#{1,6}\s+/, "").trim();
+}
+
+function countHeadingLevel(line: string): 2 | 3 | 4 {
+  const marker = line.match(/^(#{1,6})\s+/)?.[1].length;
+  if (!marker) {
+    return 2;
+  }
+  return marker <= 2 ? 2 : marker === 3 ? 3 : 4;
 }
 
 function parseRuns(line: string): TextRun[] {

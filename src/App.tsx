@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type
 import {
   Check,
   Clipboard,
-  Monitor,
   Moon,
   Palette,
   Settings,
@@ -51,11 +50,6 @@ import {
   updateCurrentDraftLayoutArticle,
 } from "./domain/draftLibrary";
 import { copyWechatHtml } from "./domain/clipboard";
-import {
-  appendImageBlock,
-  isSupportedImageFile,
-  readImageFileAsDataUrl,
-} from "./domain/imageAssets";
 import { createFeedback, type Feedback } from "./domain/feedback";
 import { mergeStylePreset } from "./domain/styleEngine";
 import { defaultStylePreset, stylePresets } from "./domain/stylePresets";
@@ -65,7 +59,7 @@ import type { ArticleAst, LayoutPlan, LayoutRecommendation, StyleOverrides } fro
 import { renderWechatHtml } from "./domain/wechatRenderer";
 
 type Workspace = "writer" | "layout";
-type PreviewDevice = "phone" | "tablet" | "desktop";
+type PreviewDevice = "phone" | "tablet";
 type BusyState = null | "writing" | "format" | "layout";
 type LayoutAiStatus =
   | { phase: "idle" }
@@ -341,6 +335,12 @@ export default function App() {
     if (busy) {
       return;
     }
+    if (
+      hasVisualFormatting(article) &&
+      !window.confirm("当前稿含有手工样式，AI 智能排版可能覆盖这些样式。继续前会保存版本快照，确认继续？")
+    ) {
+      return;
+    }
 
     const controller = new AbortController();
     const protectedArticle = protectArticleImagesForAi(article);
@@ -399,20 +399,6 @@ export default function App() {
     } finally {
       setSettingsTesting(false);
     }
-  }
-
-  async function insertImageFiles(files: FileList | File[]) {
-    const file = Array.from(files).find(isSupportedImageFile);
-    if (!file) {
-      setFeedback(createFeedback("error", "没有可导入的图片。"));
-      return;
-    }
-
-    const src = await readImageFileAsDataUrl(file);
-    const nextArticle = appendImageBlock(article, src, file.name.replace(/\.[^.]+$/, ""));
-    setArticle(nextArticle);
-    setEditorVersion((version) => version + 1);
-    setFeedback(createFeedback("success", "图片已加入草稿。"));
   }
 
   function saveCurrentStyle() {
@@ -544,6 +530,7 @@ export default function App() {
     paragraphGap?: string;
     footerText?: string;
     autoPalette?: boolean;
+    firstLineIndent?: string;
   }) {
     if (next.themeColor !== undefined) {
       setThemeColor(next.themeColor);
@@ -559,6 +546,12 @@ export default function App() {
     }
     if (next.autoPalette !== undefined) {
       setAutoPalette(next.autoPalette);
+    }
+    if (next.firstLineIndent !== undefined) {
+      setUserOverrides((current) => ({
+        ...current,
+        "rhythm.firstLineIndent": next.firstLineIndent || null,
+      }));
     }
   }
 
@@ -749,8 +742,6 @@ export default function App() {
                   article={article}
                   externalVersion={editorVersion}
                   onChangeArticle={handleArticleChange}
-                  onInsertImageFiles={(files) => void insertImageFiles(files)}
-                  isSupportedImageFile={isSupportedImageFile}
                   onCopyToLayout={copyToLayout}
                   readOnly={busy === "writing"}
                 />
@@ -884,6 +875,7 @@ export default function App() {
                       paragraphGap: String(mergedPreset.rhythm.paragraphGap),
                       footerText: String(mergedPreset.decorations.footerText ?? ""),
                       autoPalette,
+                      firstLineIndent: String(mergedPreset.rhythm.firstLineIndent ?? ""),
                     }}
                     onSettingsChange={updateLayoutSettings}
                   />
@@ -919,19 +911,11 @@ export default function App() {
                 <Tablet size={15} />
                 平板
               </button>
-              <button className={previewDevice === "desktop" ? "active" : ""} onClick={() => setPreviewDevice("desktop")}>
-                <Monitor size={15} />
-                桌面
-              </button>
             </div>
             <div className={`device-frame ${previewDevice}${darkPreview ? " dark" : ""}`}>
               {layoutArticle ? (
                 <div className="device-screen">
-                  {previewDevice === "desktop" ? (
-                    <div className="desktop-column" dangerouslySetInnerHTML={{ __html: layoutHtml }} />
-                  ) : (
-                    <div dangerouslySetInnerHTML={{ __html: layoutHtml }} />
-                  )}
+                  <div dangerouslySetInnerHTML={{ __html: layoutHtml }} />
                 </div>
               ) : (
                 <div className="device-screen">
@@ -944,4 +928,25 @@ export default function App() {
       )}
     </div>
   );
+}
+
+function hasVisualFormatting(article: ArticleAst): boolean {
+  return article.blocks.some((block) => {
+    const hasBlockStyle = Boolean(block.style && Object.keys(block.style).length > 0);
+    const hasRole = "role" in block && Boolean(block.role);
+    if (hasBlockStyle || hasRole) {
+      return true;
+    }
+    if (block.type !== "paragraph") {
+      return false;
+    }
+    return block.runs.some(
+      (run) =>
+        Boolean(run.marks?.length) ||
+        Boolean(
+          run.attrs &&
+            Object.values(run.attrs).some((value) => typeof value === "string" && value.trim())
+        )
+    );
+  });
 }

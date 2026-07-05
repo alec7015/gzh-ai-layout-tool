@@ -21,6 +21,7 @@ export interface TextRun {
     color?: string;
     background?: string;
     fontSize?: string;
+    fontFamily?: string;
   };
 }
 
@@ -39,6 +40,7 @@ export interface TitleBlock extends BaseBlock {
 export interface HeadingBlock extends BaseBlock {
   type: "heading";
   text: string;
+  level?: 2 | 3 | 4;
 }
 
 export interface ParagraphBlock extends BaseBlock {
@@ -134,6 +136,7 @@ export interface Rhythm {
   sectionGap: string;
   contentPadding: string;
   align: "left" | "center";
+  firstLineIndent?: string;
 }
 
 export interface ComponentVariant {

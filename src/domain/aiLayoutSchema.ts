@@ -62,7 +62,7 @@ export function buildLayoutPlanRequest(
     .join("\n");
   const blockList = serializeBlocksForPlan(article);
   const componentVocabulary = Object.entries(VARIANT_VOCABULARY)
-    .map(([component, variants]) => `${component}: ${variants.join(" / ")}`)
+    .map(([component, variants]) => `${component}: ${variants.map(describeVariant).join(" / ")}`)
     .join("\n");
 
   return {
@@ -87,6 +87,13 @@ export function buildLayoutPlanRequest(
       },
     ],
   };
+}
+
+function describeVariant(variant: string) {
+  if (variant === "number-badge" || variant === "chapter-badge") {
+    return `${variant}（自动编号，仅适合步骤教程/盘点清单类内容）`;
+  }
+  return variant;
 }
 
 export function coerceLayoutRecommendation(value: unknown): LayoutRecommendation | null {

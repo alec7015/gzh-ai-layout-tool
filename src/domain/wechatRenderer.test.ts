@@ -77,4 +77,44 @@ describe("wechatRenderer", () => {
     expect(html).toContain("font-style:italic");
     expect(html).not.toContain("<p style=\"margin:8px 0 0");
   });
+
+  it("does not auto-number default listicle headings", () => {
+    const html = renderWechatHtml(
+      {
+        meta: { title: "默认无编号" },
+        blocks: [
+          { id: "title-1", type: "title", text: "默认无编号", style: {} },
+          { id: "h-1", type: "heading", text: "背景介绍", level: 1, style: {} },
+        ],
+      },
+      defaultStylePreset
+    );
+
+    expect(html).toContain("背景介绍");
+    expect(html).not.toContain(">1</span>背景介绍");
+    expect(html).not.toContain(">01</span>背景介绍");
+  });
+
+  it("numbers only level-one headings for explicit numbered variants", () => {
+    const preset = mergeStylePreset(defaultStylePreset, {
+      "components.heading.variant": "number-badge",
+    });
+    const html = renderWechatHtml(
+      {
+        meta: { title: "编号回归" },
+        blocks: [
+          { id: "title-1", type: "title", text: "编号回归", style: {} },
+          { id: "h-1", type: "heading", text: "第一章", level: 1, style: {} },
+          { id: "h-2", type: "heading", text: "二级 A", level: 2, style: {} },
+          { id: "h-3", type: "heading", text: "二级 B", level: 2, style: {} },
+          { id: "h-4", type: "heading", text: "第二章", level: 1, style: {} },
+        ],
+      },
+      preset
+    );
+
+    expect(html).toContain(">1</span>第一章");
+    expect(html).toContain(">2</span>第二章");
+    expect(html).not.toContain(">4</span>第二章");
+  });
 });

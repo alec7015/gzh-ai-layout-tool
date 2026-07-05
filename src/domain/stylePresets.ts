@@ -20,10 +20,10 @@ export const VARIANT_VOCABULARY = {
 
 export const VARIANT_LABELS = {
   heading: {
-    "number-badge": "序号章",
+    "number-badge": "序号章（自动编号）",
     "left-color-bar": "左侧色条",
     "plain-bold": "无装饰加粗",
-    "chapter-badge": "章节徽标",
+    "chapter-badge": "章节徽标（自动编号）",
     "gradient-underline": "荧光衬底",
     "block-fill": "色块填充",
     "center-ornament": "居中花饰",
@@ -120,7 +120,7 @@ export const stylePresets: StylePreset[] = [
     },
     components: {
       title: { variant: "block" },
-      heading: { variant: "number-badge" },
+      heading: { variant: "left-color-bar" },
       quote: { variant: "card" },
       list: { variant: "number-circle-card" },
       emphasis: { variant: "highlight-bg" },

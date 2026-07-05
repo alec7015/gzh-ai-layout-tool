@@ -7,7 +7,9 @@ export function renderWechatHtml(article: ArticleAst, preset: StylePreset): stri
   const body = article.blocks
     .map((block, index) => {
       if (block.type === "heading") {
-        headingIndex += 1;
+        if ((block.level ?? 1) === 1) {
+          headingIndex += 1;
+        }
         return renderBlock(block, preset, index, headingIndex);
       }
 

@@ -90,6 +90,7 @@ describe("aiLayoutSchema", () => {
     expect(content).toContain(`plans`);
     expect(content).toContain(`[${article.blocks[0].id}|title]`);
     expect(content).toContain("chapter-badge");
+    expect(content).toContain("仅适合步骤教程/盘点清单类内容");
     expect(content).toContain("keyQuote");
   });
 

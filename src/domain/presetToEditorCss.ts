@@ -1,10 +1,12 @@
 import type { StylePreset } from "./types";
 
 export function presetToEditorCss(preset: StylePreset, scope = ".layout-editor .tiptap"): string {
+  const headingVariant = preset.components.heading.variant;
+  const numberedHeadings = headingVariant === "number-badge" || headingVariant === "chapter-badge";
   const headingBlock =
-    preset.components.heading.variant === "block-fill"
+    headingVariant === "block-fill"
       ? `background: ${preset.palette.primary}; color: #fff; padding: 6px 12px; border-radius: 6px; border-left: 0;`
-      : preset.components.heading.variant === "gradient-underline"
+      : headingVariant === "gradient-underline"
         ? `background: linear-gradient(transparent 62%, ${preset.palette.primary}33 62%); border-left: 0; padding-left: 0;`
         : "";
   const quoteBlock =
@@ -25,6 +27,7 @@ ${scope} {
   line-height: ${preset.typography.lineHeight};
   letter-spacing: ${preset.typography.letterSpacing};
   text-align: ${preset.rhythm.align};
+  ${numberedHeadings ? "counter-reset: gzh-h1;" : ""}
 }
 ${scope} h1[data-block-type="title"] {
   margin: 0 0 ${preset.rhythm.sectionGap};
@@ -43,6 +46,7 @@ ${scope} h1:not([data-block-type="title"]) {
   padding-left: 10px;
   ${headingBlock}
 }
+${numberedHeadings ? numberedHeadingCss(scope, preset) : ""}
 ${scope} h2 {
   margin: ${preset.rhythm.sectionGap} 0 ${preset.rhythm.paragraphGap};
   color: ${preset.palette.primary};
@@ -122,6 +126,29 @@ ${scope} [data-block-role="steps"] {
   background: ${preset.palette.secondary};
 }
 `;
+}
+
+function numberedHeadingCss(scope: string, preset: StylePreset) {
+  return `
+${scope} h1:not([data-block-type="title"]) {
+  border-left: 0;
+  padding-left: 0;
+}
+${scope} h1:not([data-block-type="title"])::before {
+  counter-increment: gzh-h1;
+  content: counter(gzh-h1, decimal-leading-zero);
+  display: inline-block;
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: ${preset.palette.primary};
+  color: #fff;
+  font-size: 13px;
+  text-align: center;
+  vertical-align: 1px;
+}`;
 }
 
 function decreasePx(value: string, amount: number) {

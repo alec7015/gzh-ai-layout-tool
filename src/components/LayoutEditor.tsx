@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect, useState } from "react";
+import type { Editor } from "@tiptap/core";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
@@ -7,12 +8,16 @@ import { BackgroundColor, Color, FontSize, TextStyle } from "@tiptap/extension-t
 import FontFamily from "@tiptap/extension-font-family";
 import ImageNode from "@tiptap/extension-image";
 import { Settings } from "lucide-react";
+import { callChatCompletionsText } from "../domain/aiClient";
+import type { AiSettings } from "../domain/aiSettings";
 import { BlockMeta } from "./BlockMetaExtension";
+import { EditorInsertTools } from "./EditorInsertTools";
 import { ImageGrid } from "./ImageGridExtension";
 import { RichTextToolbar } from "./RichTextToolbar";
 import { usePopoverDismiss } from "./editorShared";
 import { astToTiptapDoc, tiptapDocToAst, type TiptapDoc } from "../domain/tiptapAdapter";
 import { presetToEditorCss } from "../domain/presetToEditorCss";
+import { buildOrnamentRequest, sanitizeSvg, svgToPngDataUrl } from "../domain/svgOrnament";
 import { VARIANT_LABELS, VARIANT_VOCABULARY } from "../domain/stylePresets";
 import type { ArticleAst, StylePreset } from "../domain/types";
 
@@ -36,6 +41,7 @@ interface LayoutEditorProps {
     dividerVariant: string;
   };
   onSettingsChange(next: Partial<LayoutEditorProps["settings"]>): void;
+  aiSettings: AiSettings;
 }
 
 export default function LayoutEditor({
@@ -47,10 +53,13 @@ export default function LayoutEditor({
   onSaveStyle,
   settings,
   onSettingsChange,
+  aiSettings,
 }: LayoutEditorProps) {
   const articleRef = useRef(article);
   const settingsRef = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ornamentStatus, setOrnamentStatus] = useState("");
+  const [ornamentBusy, setOrnamentBusy] = useState(false);
   const editor = useEditor(
     {
       extensions: [
@@ -95,6 +104,36 @@ export default function LayoutEditor({
 
   usePopoverDismiss(settingsRef, settingsOpen, () => setSettingsOpen(false));
 
+  async function generateOrnament() {
+    if (!editor || ornamentBusy) {
+      return;
+    }
+    setOrnamentBusy(true);
+    setOrnamentStatus("正在生成装饰图…");
+    try {
+      const result = await callChatCompletionsText(
+        aiSettings,
+        buildOrnamentRequest(article.meta.title, preset.palette)
+      );
+      const rawSvg = result.ok ? result.data : fallbackOrnamentSvg(preset);
+      const sanitized = sanitizeSvg(rawSvg);
+      if (!sanitized.ok) {
+        setOrnamentStatus(sanitized.reason);
+        return;
+      }
+      const src = await svgToPngDataUrl(sanitized.svg);
+      const chain = editor.chain().focus() as ReturnType<Editor["chain"]> & {
+        setImage(attrs: { src: string; alt?: string }): { run(): boolean };
+      };
+      chain.setImage({ src, alt: "AI 装饰图" }).run();
+      setOrnamentStatus(result.ok ? "已插入装饰图。" : `${result.message} 已插入本地装饰图。`);
+    } catch {
+      setOrnamentStatus("装饰图生成失败，请稍后重试。");
+    } finally {
+      setOrnamentBusy(false);
+    }
+  }
+
   return (
     <div className="layout-editor">
       <style>{css}</style>
@@ -102,7 +141,8 @@ export default function LayoutEditor({
         editor={editor}
         ariaLabel="排版工具栏"
         className="layout-editor-toolbar"
-        features={{ blockBackground: true, clearBlockStyle: true }}
+        features={{ blockBackground: true, clearBlockStyle: true, blockRoles: true }}
+        slotLeft={<EditorInsertTools editor={editor} />}
         slotRight={
           <div className="layout-settings-wrap" ref={settingsRef}>
             <button type="button" onClick={() => setSettingsOpen((value) => !value)}>
@@ -177,6 +217,12 @@ export default function LayoutEditor({
                   文末引导语
                   <textarea rows={3} value={settings.footerText} onChange={(event) => onSettingsChange({ footerText: event.target.value })} />
                 </label>
+                <div className="ornament-generator">
+                  <button type="button" disabled={ornamentBusy} onClick={() => void generateOrnament()}>
+                    {ornamentBusy ? "生成中…" : "AI 生成装饰图"}
+                  </button>
+                  {ornamentStatus ? <span>{ornamentStatus}</span> : null}
+                </div>
                 <div className="layout-settings-actions">
                   <button type="button" onClick={onSaveStyle}>存为我的版式</button>
                   <button type="button" onClick={onResetStyle}>恢复默认</button>
@@ -191,6 +237,10 @@ export default function LayoutEditor({
       </div>
     </div>
   );
+}
+
+function fallbackOrnamentSvg(preset: StylePreset) {
+  return `<svg viewBox="0 0 680 120"><g opacity="0.95"><line x1="80" y1="60" x2="280" y2="60" stroke="${preset.palette.primary}" stroke-width="3" stroke-linecap="round"/><circle cx="340" cy="60" r="18" fill="${preset.palette.secondary}" stroke="${preset.palette.primary}" stroke-width="3"/><line x1="400" y1="60" x2="600" y2="60" stroke="${preset.palette.primary}" stroke-width="3" stroke-linecap="round"/><circle cx="340" cy="60" r="6" fill="${preset.palette.accent}"/></g></svg>`;
 }
 
 function VariantSelect<T extends string>({

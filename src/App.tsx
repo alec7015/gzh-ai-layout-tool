@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { EditorBoundary } from "./components/EditorBoundary";
 import { SettingsModal } from "./components/SettingsModal";
+import { StyleExtractDialog } from "./components/StyleExtractDialog";
 import { useColumnResize } from "./hooks/useColumnResize";
 import { recommendLayout, recommendLayoutPlan } from "./domain/aiLayout";
 import { callChatCompletionsJson, callChatCompletionsText } from "./domain/aiClient";
@@ -57,7 +58,7 @@ import { mergeStylePreset } from "./domain/styleEngine";
 import { defaultStylePreset, stylePresets } from "./domain/stylePresets";
 import { applyRolesToArticle, hasAnyRole, planToOverrides } from "./domain/layoutPlan";
 import { derivePaletteOverrides } from "./domain/paletteDerive";
-import type { ArticleAst, LayoutPlan, LayoutRecommendation, StyleOverrides } from "./domain/types";
+import type { ArticleAst, LayoutPlan, LayoutRecommendation, StyleOverrides, StylePreset } from "./domain/types";
 import { renderWechatHtml } from "./domain/wechatRenderer";
 
 type Workspace = "writer" | "layout";
@@ -100,6 +101,7 @@ export default function App() {
   const [writingOutline, setWritingOutline] = useState("");
   const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings(storage));
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [styleExtractOpen, setStyleExtractOpen] = useState(false);
   const [settingsTesting, setSettingsTesting] = useState(false);
   const [settingsTestMessage, setSettingsTestMessage] = useState("可先测试连接，再开始写作。");
   const [customStyles, setCustomStyles] = useState(() => loadCustomStyles(storage));
@@ -139,6 +141,10 @@ export default function App() {
   );
   const layoutHtml = useMemo(
     () => (layoutArticle ? renderWechatHtml(layoutArticle, mergedPreset) : ""),
+    [layoutArticle, mergedPreset]
+  );
+  const layoutPreviewHtml = useMemo(
+    () => (layoutArticle ? renderWechatHtml(layoutArticle, mergedPreset, { includePlaceholders: true }) : ""),
     [layoutArticle, mergedPreset]
   );
   const thumbArticle = useMemo(
@@ -468,6 +474,23 @@ export default function App() {
     setFeedback(createFeedback("success", "已保存为我的版式。"));
   }
 
+  function applyExtractedStyle(preset: StylePreset, mode: "apply" | "save") {
+    const style = { ...preset, id: preset.id.startsWith("custom-") ? preset.id : `custom-${Date.now()}` };
+    setCustomStyles((current) => {
+      const rest = current.filter((item) => item.id !== style.id);
+      return [...rest, style];
+    });
+    setSelectedStyleId(style.id);
+    setRecommendation({
+      styleId: style.id,
+      reason: mode === "save" ? "已保存参考文章提取版式" : "已应用参考文章提取版式",
+      overrides: {},
+    });
+    setUserOverrides({});
+    setStyleExtractOpen(false);
+    setFeedback(createFeedback("success", mode === "save" ? "已保存为我的版式并应用。" : "已应用提取版式。"));
+  }
+
   function applyPlan(plan: LayoutPlan, index: number | null, statusMessage?: string) {
     const nextRecommendation = {
       styleId: plan.styleId,
@@ -650,7 +673,9 @@ export default function App() {
 
     const preset = allStylePresets.find((item) => item.id === plan.styleId) ?? defaultStylePreset;
     const merged = mergeStylePreset(preset, planToOverrides(plan), {});
-    return renderWechatHtml(applyRolesToArticle(thumbArticle, plan.blocks ?? []), merged);
+    return renderWechatHtml(applyRolesToArticle(thumbArticle, plan.blocks ?? []), merged, {
+      includePlaceholders: true,
+    });
   }
 
   function planStyleName(plan: LayoutPlan) {
@@ -885,6 +910,9 @@ export default function App() {
               <Palette size={16} />
               版式库
             </div>
+            <button className="extract-style-button" type="button" onClick={() => setStyleExtractOpen(true)}>
+              从文章提取版式
+            </button>
             <article className="recommend-card">
               <span>AI 合成方案</span>
               <strong>{planCandidates.length > 0 ? `${planCandidates.length} 套候选` : planStyleName({ styleId: recommendation.styleId, reason: recommendation.reason })}</strong>
@@ -956,6 +984,7 @@ export default function App() {
                 <Suspense fallback={<div className="editor-loading">正在打开排版画布...</div>}>
                   <LayoutEditor
                     article={layoutArticle}
+                    aiSettings={aiSettings}
                     externalVersion={layoutEditorVersion}
                     preset={mergedPreset}
                     onChangeArticle={(nextArticle) => setLayoutArticle(nextArticle)}
@@ -1011,7 +1040,7 @@ export default function App() {
             <div className={`device-frame ${previewDevice}${darkPreview ? " dark" : ""}`}>
               {layoutArticle ? (
                 <div className="device-screen">
-                  <div dangerouslySetInnerHTML={{ __html: layoutHtml }} />
+                  <div dangerouslySetInnerHTML={{ __html: layoutPreviewHtml }} />
                 </div>
               ) : (
                 <div className="device-screen">
@@ -1022,6 +1051,14 @@ export default function App() {
           </aside>
         </main>
       )}
+      <StyleExtractDialog
+        open={styleExtractOpen}
+        article={layoutArticle ?? article}
+        aiSettings={aiSettings}
+        onApply={(preset) => applyExtractedStyle(preset, "apply")}
+        onSave={(preset) => applyExtractedStyle(preset, "save")}
+        onClose={() => setStyleExtractOpen(false)}
+      />
     </div>
   );
 }

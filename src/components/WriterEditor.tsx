@@ -7,13 +7,12 @@ import { BackgroundColor, Color, FontSize, TextStyle } from "@tiptap/extension-t
 import FontFamily from "@tiptap/extension-font-family";
 import ImageNode from "@tiptap/extension-image";
 import { Slice, Fragment } from "@tiptap/pm/model";
-import { Image, LayoutGrid, Minus, Table2 } from "lucide-react";
 import { BlockMeta } from "./BlockMetaExtension";
+import { EditorInsertTools, insertImageFilesIntoEditor } from "./EditorInsertTools";
 import { ImageGrid } from "./ImageGridExtension";
 import { RichTextToolbar } from "./RichTextToolbar";
 import { htmlToCleanArticle } from "../domain/magicPaste";
 import { isSupportedImageFile } from "../domain/imageAssets";
-import { compressImageFile } from "../domain/imageCompress";
 import {
   astToTiptapDoc,
   tiptapDocToAst,
@@ -37,7 +36,6 @@ export default function WriterEditor({
   readOnly = false,
 }: WriterEditorProps) {
   const articleRef = useRef(article);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const editor = useEditor(
     {
       extensions: [
@@ -108,48 +106,19 @@ export default function WriterEditor({
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
-  function insertImageGrid() {
-    if (!editor || editor.isDestroyed) {
-      return;
-    }
-
-    editor.chain().focus().insertImageGrid({ layout: "two" }).run();
-  }
-
-  function insertTable() {
-    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-  }
-
-  async function insertImageFiles(files: FileList | File[]) {
-    if (!editor || editor.isDestroyed) {
-      return;
-    }
-    const file = Array.from(files).find(isSupportedImageFile);
-    if (!file) {
-      return;
-    }
-
-    const src = await compressImageFile(file);
-    editor
-      .chain()
-      .focus()
-      .setImage({ src, alt: "" })
-      .run();
-  }
-
   return (
     <div
       className="tiptap-drop-zone"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
-        void insertImageFiles(event.dataTransfer.files);
+        void insertImageFilesIntoEditor(editor, event.dataTransfer.files);
       }}
       onPaste={(event) => {
         const hasImage = Array.from(event.clipboardData.files).some(isSupportedImageFile);
         if (hasImage) {
           event.preventDefault();
-          void insertImageFiles(event.clipboardData.files);
+          void insertImageFilesIntoEditor(editor, event.clipboardData.files);
         }
       }}
     >
@@ -157,37 +126,7 @@ export default function WriterEditor({
         editor={editor}
         ariaLabel="写作工具栏"
         className="editor-toolbar"
-        slotLeft={
-          <>
-            <span className="ribbon-divider" />
-            <div className="ribbon-group">
-              <button type="button" title="分隔线" onClick={() => editor?.chain().focus().setHorizontalRule().run()}>
-                <Minus size={16} />
-              </button>
-              <button type="button" title="表格" onClick={insertTable}>
-                <Table2 size={16} />
-              </button>
-              <button type="button" title="图片" onClick={() => fileInputRef.current?.click()}>
-                <Image size={16} />
-              </button>
-              <button type="button" title="插入多图" onClick={insertImageGrid}>
-                <LayoutGrid size={16} />
-              </button>
-            </div>
-            <input
-              ref={fileInputRef}
-              className="hidden-file-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              onChange={(event) => {
-                if (event.target.files) {
-                  void insertImageFiles(event.target.files);
-                  event.target.value = "";
-                }
-              }}
-            />
-          </>
-        }
+        slotLeft={<EditorInsertTools editor={editor} />}
         slotRight={
           onCopyToLayout ? (
             <button className="toolbar-primary" type="button" onClick={onCopyToLayout}>

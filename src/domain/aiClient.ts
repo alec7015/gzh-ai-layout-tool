@@ -34,7 +34,7 @@ export function isTauriRuntime(): boolean {
 }
 
 /** 默认 fetch：桌面端优先用 tauri-plugin-http（绕过 CORS），网页端回退浏览器 fetch。 */
-async function resolveDefaultFetch(): Promise<FetchLike> {
+export async function resolveFetchLike(): Promise<FetchLike> {
   if (isTauriRuntime()) {
     try {
       const httpModule = await import("@tauri-apps/plugin-http");
@@ -84,7 +84,7 @@ export async function callChatCompletionsText(
     };
   }
 
-  const doFetch = fetcher ?? (await resolveDefaultFetch());
+  const doFetch = fetcher ?? (await resolveFetchLike());
   const url = `${settings.baseUrl.replace(/\/+$/, "")}/chat/completions`;
   const body = buildRequestBody(settings, request);
 

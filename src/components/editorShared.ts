@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from "react";
 import type { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import type { BlockRole } from "../domain/types";
 
 export const fontSizeOptions = ["14px", "15px", "16px", "17px", "18px", "20px", "24px"];
 export const lineHeightOptions = ["1.5", "1.75", "2", "2.25"];
@@ -115,11 +116,17 @@ export function setBlockStyleAttr(editor: Editor | null, key: string, value: str
 }
 
 export function clearBlockRoleAttr(editor: Editor | null) {
+  setBlockRoleAttr(editor, null);
+}
+
+export function setBlockRoleAttr(editor: Editor | null, role: BlockRole | null, hint?: string) {
   const block = findTopBlock(editor);
   if (!editor || !block) {
     return;
   }
-  editor.view.dispatch(editor.state.tr.setNodeAttribute(block.pos, "blockRole", null));
+  let tr = editor.state.tr.setNodeAttribute(block.pos, "blockRole", role);
+  tr = tr.setNodeAttribute(block.pos, "blockRoleHint", role === "imageSlot" && hint ? hint : null);
+  editor.view.dispatch(tr);
 }
 
 export function applyPainterToStyle(

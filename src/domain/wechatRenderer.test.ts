@@ -117,4 +117,30 @@ describe("wechatRenderer", () => {
     expect(html).toContain(">2</span>第二章");
     expect(html).not.toContain(">4</span>第二章");
   });
+
+  it("renders tip cards and keeps image placeholders out of copied HTML", () => {
+    const articleWithRoles: ArticleAst = {
+      meta: { title: "角色测试" },
+      blocks: [
+        { id: "title-1", type: "title", text: "角色测试", style: {} },
+        { id: "p-tip", type: "paragraph", runs: [{ text: "这里需要注意" }], role: "tip", style: {} },
+        {
+          id: "p-img",
+          type: "paragraph",
+          runs: [{ text: "这里适合配图" }],
+          role: "imageSlot",
+          roleHint: "放一张产品对比图",
+          style: {},
+        },
+      ],
+    };
+
+    const previewHtml = renderWechatHtml(articleWithRoles, defaultStylePreset, { includePlaceholders: true });
+    const copyHtml = renderWechatHtml(articleWithRoles, defaultStylePreset, { includePlaceholders: false });
+
+    expect(previewHtml).toContain("💡 提示");
+    expect(previewHtml).toContain("📷 建议配图：放一张产品对比图");
+    expect(copyHtml).toContain("💡 提示");
+    expect(copyHtml).not.toContain("建议配图");
+  });
 });

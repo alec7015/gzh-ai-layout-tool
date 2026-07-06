@@ -57,6 +57,15 @@ export const BlockMeta = Extension.create({
                 : {};
             },
           },
+          blockRoleHint: {
+            default: null,
+            parseHTML: (element) => element.getAttribute("data-block-role-hint"),
+            renderHTML: (attrs) => {
+              return typeof attrs.blockRoleHint === "string"
+                ? { "data-block-role-hint": attrs.blockRoleHint }
+                : {};
+            },
+          },
         },
       },
     ];

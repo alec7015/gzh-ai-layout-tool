@@ -13,16 +13,16 @@ export function planToOverrides(plan: LayoutPlan): StyleOverrides {
 }
 
 export function applyRolesToArticle(article: ArticleAst, roles: NonNullable<LayoutPlan["blocks"]> = []): ArticleAst {
-  const roleMap = new Map(roles.map((item) => [item.blockId, item.role]));
+  const roleMap = new Map(roles.map((item) => [item.blockId, item]));
   return {
     ...article,
     blocks: article.blocks.map((block) => {
-      const nextRole = roleMap.get(block.id);
-      if (!nextRole) {
-        const { role: _role, ...rest } = block;
+      const next = roleMap.get(block.id);
+      if (!next) {
+        const { role: _role, roleHint: _roleHint, ...rest } = block;
         return rest;
       }
-      return { ...block, role: nextRole };
+      return { ...block, role: next.role, roleHint: next.hint };
     }),
   };
 }

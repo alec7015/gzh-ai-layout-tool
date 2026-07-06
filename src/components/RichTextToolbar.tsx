@@ -31,11 +31,14 @@ import {
   fontFamilyOptions,
   fontSizeOptions,
   getBlockStyleValue,
+  findTopBlock,
   lineHeightOptions,
+  setBlockRoleAttr,
   setBlockStyleAttr,
   type AlignValue,
   type PainterSnapshot,
 } from "./editorShared";
+import type { BlockRole } from "../domain/types";
 
 interface RichTextToolbarProps {
   editor: Editor | null;
@@ -44,6 +47,7 @@ interface RichTextToolbarProps {
   features?: {
     blockBackground?: boolean;
     clearBlockStyle?: boolean;
+    blockRoles?: boolean;
   };
   slotLeft?: ReactNode;
   slotRight?: ReactNode;
@@ -73,6 +77,7 @@ export function RichTextToolbar({
   const displayedFontSizeSelect = customFontSizeOpen ? "custom" : fontSizeSelect;
   const displayedLineHeightSelect = customLineHeightOpen ? "custom" : lineHeightSelect;
   const currentBlock = useMemo(() => blockSelectValue(editor), [editor, editor?.state.selection]);
+  const currentRole = useMemo(() => blockRoleValue(editor), [editor, editor?.state.selection]);
   const currentAlign = getActiveAlign(editor);
   const currentIndent = getBlockStyleValue(editor, "text-indent") === "2em";
 
@@ -344,6 +349,23 @@ export function RichTextToolbar({
       >
         <Indent size={16} />
       </button>
+      {features?.blockRoles ? (
+        <select
+          aria-label="块角色"
+          value={currentRole}
+          onChange={(event) => {
+            const role = event.target.value as "" | BlockRole;
+            setBlockRoleAttr(editor, role || null, role === "imageSlot" ? "补充一张贴合段落内容的配图" : undefined);
+          }}
+        >
+          <option value="">角色</option>
+          <option value="keyQuote">金句卡</option>
+          <option value="emphasis">重点段</option>
+          <option value="summary">小结卡</option>
+          <option value="tip">提示卡</option>
+          <option value="imageSlot">建议配图</option>
+        </select>
+      ) : null}
       <button
         className={painterMode ? "active" : ""}
         type="button"
@@ -456,6 +478,11 @@ function getActiveAlign(editor: Editor | null): AlignValue {
     return "justify";
   }
   return "left";
+}
+
+function blockRoleValue(editor: Editor | null) {
+  const role = findTopBlock(editor)?.node.attrs.blockRole;
+  return typeof role === "string" ? role : "";
 }
 
 function alignTitle(align: AlignValue) {

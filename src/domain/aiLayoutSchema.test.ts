@@ -92,6 +92,44 @@ describe("aiLayoutSchema", () => {
     expect(content).toContain("chapter-badge");
     expect(content).toContain("仅适合步骤教程/盘点清单类内容");
     expect(content).toContain("keyQuote");
+    expect(content).toContain("tip：操作提醒/注意事项段落");
+    expect(content).toContain("imageSlot：该段之后适合配一张图");
+  });
+
+  it("coerces tip and imageSlot roles with quotas and hint truncation", () => {
+    const article = {
+      ...createSampleArticle(),
+      blocks: [
+        ...createSampleArticle().blocks,
+        { id: "extra-1", type: "paragraph" as const, runs: [{ text: "额外段落 1" }], style: {} },
+        { id: "extra-2", type: "paragraph" as const, runs: [{ text: "额外段落 2" }], style: {} },
+      ],
+    };
+    const paragraphIds = article.blocks.filter((block) => block.type === "paragraph").map((block) => block.id);
+    const plan = coerceLayoutPlan(
+      {
+        plans: [
+          {
+            styleId: "listicle_cards",
+            reason: "补充视觉节奏",
+            blocks: [
+              { blockId: paragraphIds[0], role: "tip" },
+              { blockId: paragraphIds[1], role: "tip" },
+              { blockId: paragraphIds[2], role: "tip" },
+              { blockId: paragraphIds[0], role: "imageSlot", hint: "一张清晨桌面和计划本的明亮图片".repeat(3) },
+              { blockId: paragraphIds[1], role: "imageSlot", hint: "闹钟与晨光" },
+              { blockId: paragraphIds[2], role: "imageSlot", hint: "跑步鞋" },
+              { blockId: paragraphIds[3], role: "imageSlot", hint: "多余配图" },
+            ],
+          },
+        ],
+      },
+      article
+    );
+
+    expect(plan?.[0].blocks?.filter((item) => item.role === "tip")).toHaveLength(2);
+    expect(plan?.[0].blocks?.filter((item) => item.role === "imageSlot")).toHaveLength(3);
+    expect(plan?.[0].blocks?.find((item) => item.role === "imageSlot")?.hint).toHaveLength(40);
   });
 
   it("coerces layout plans by dropping unsafe fields and enforcing role quotas", () => {

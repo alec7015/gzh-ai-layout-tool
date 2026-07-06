@@ -2,7 +2,15 @@ import type { ArticleAst, ArticleBlock, StylePreset, TableRow, TextRun } from ".
 import { toInlineOverride } from "./blockOverrides";
 import { renderImageGridWechat } from "./imageGrid";
 
-export function renderWechatHtml(article: ArticleAst, preset: StylePreset): string {
+export interface RenderWechatOptions {
+  includePlaceholders?: boolean;
+}
+
+export function renderWechatHtml(
+  article: ArticleAst,
+  preset: StylePreset,
+  options: RenderWechatOptions = {}
+): string {
   let headingIndex = 0;
   const body = article.blocks
     .map((block, index) => {
@@ -10,10 +18,10 @@ export function renderWechatHtml(article: ArticleAst, preset: StylePreset): stri
         if ((block.level ?? 1) === 1) {
           headingIndex += 1;
         }
-        return renderBlock(block, preset, index, headingIndex);
+        return renderBlockWithPlaceholders(block, preset, index, headingIndex, options);
       }
 
-      return renderBlock(block, preset, index, headingIndex);
+      return renderBlockWithPlaceholders(block, preset, index, headingIndex, options);
     })
     .join("");
   const header = renderHeaderDecoration(preset);
@@ -30,6 +38,20 @@ export function renderWechatHtml(article: ArticleAst, preset: StylePreset): stri
     "text-align": preset.rhythm.align,
     "font-family": "-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif",
   })}">${header}${body}${footer}</section>`;
+}
+
+function renderBlockWithPlaceholders(
+  block: ArticleBlock,
+  preset: StylePreset,
+  index: number,
+  headingIndex: number,
+  options: RenderWechatOptions
+): string {
+  const html = renderBlock(block, preset, index, headingIndex);
+  if (options.includePlaceholders && block.role === "imageSlot") {
+    return `${html}${renderImageSlot(block.roleHint, preset)}`;
+  }
+  return html;
 }
 
 function renderBlock(
@@ -241,6 +263,26 @@ function renderParagraph(
     })}">小结</span><section>${content}</section></section>`;
   }
 
+  if (block.role === "tip") {
+    return `<section style="${style({
+      margin: `0 0 ${preset.rhythm.paragraphGap}`,
+      background: preset.palette.secondary,
+      border: `1px solid ${preset.palette.primary}33`,
+      padding: "12px 14px",
+      "border-radius": "8px",
+      color: preset.palette.textMain,
+      "font-size": preset.typography.bodySize,
+      "line-height": String(preset.typography.lineHeight),
+      ...toInlineOverride(block.style),
+    })}"><span style="${style({
+      display: "inline-block",
+      color: preset.palette.primary,
+      "font-size": "13px",
+      "font-weight": "700",
+      "margin-bottom": "6px",
+    })}">💡 提示</span><section>${content}</section></section>`;
+  }
+
   if (block.role === "lead") {
     return `<p style="${style({
       margin: `0 0 ${preset.rhythm.paragraphGap}`,
@@ -268,6 +310,19 @@ function renderParagraph(
   }
 
   return `<p style="${paragraphStyle(preset, block)}">${content}</p>`;
+}
+
+function renderImageSlot(hint: string | undefined, preset: StylePreset): string {
+  return `<section data-placeholder="image-slot" style="${style({
+    margin: `${preset.rhythm.paragraphGap} 0 ${preset.rhythm.sectionGap}`,
+    padding: "24px",
+    border: `1px dashed ${preset.palette.textSub}`,
+    color: preset.palette.textSub,
+    "border-radius": "8px",
+    "text-align": "center",
+    "font-size": "13px",
+    "line-height": "1.7",
+  })}">📷 建议配图：${escapeHtml(hint?.trim() || "补充一张贴合段落内容的图片")}</section>`;
 }
 
 function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): string {

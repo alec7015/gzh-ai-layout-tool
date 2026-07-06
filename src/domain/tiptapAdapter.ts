@@ -38,6 +38,7 @@ export function tiptapDocToAst(doc: TiptapDoc, previous?: ArticleAst): ArticleAs
         ...(isTitle ? {} : { level: headingLevelFromNode(node) }),
         style: styleFromNode(node),
         role: roleFromNode(node),
+        roleHint: roleHintFromNode(node),
       } as ArticleBlock;
     }
     return nodeToBlock(node, index);
@@ -148,6 +149,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       ...(isTitle ? {} : { level: headingLevelFromNode(node) }),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -159,6 +161,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       caption: typeof node.attrs?.alt === "string" ? node.attrs.alt : "配图",
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -173,6 +176,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
         caption: image[1] || "配图",
         style: styleFromNode(node),
         role: roleFromNode(node),
+        roleHint: roleHintFromNode(node),
       };
     }
 
@@ -182,6 +186,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       runs: inlineRuns(node),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -192,6 +197,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       text: inlineText(node).trim(),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -203,6 +209,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       items: (node.content ?? []).map((item) => inlineText(item).trim()).filter(Boolean),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -217,6 +224,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       radius: Number(attrs.radius ?? 8),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
@@ -227,11 +235,18 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       rows: tableRowsFromNode(node),
       style: styleFromNode(node),
       role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
     };
   }
 
   if (node.type === "horizontalRule") {
-    return { id: blockIdFromNode(node, "divider", index), type: "divider", style: styleFromNode(node), role: roleFromNode(node) };
+    return {
+      id: blockIdFromNode(node, "divider", index),
+      type: "divider",
+      style: styleFromNode(node),
+      role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
+    };
   }
 
   return null;
@@ -391,6 +406,9 @@ function blockAttrs(block: ArticleBlock): Record<string, unknown> {
   if (block.role) {
     attrs.blockRole = block.role;
   }
+  if (block.roleHint) {
+    attrs.blockRoleHint = block.roleHint;
+  }
   if (Object.keys(style).length > 0) {
     attrs.blockStyle = style;
   }
@@ -404,13 +422,19 @@ function roleFromNode(node: TiptapNode): BlockRole | undefined {
   return isBlockRole(node.attrs?.blockRole) ? node.attrs.blockRole : undefined;
 }
 
+function roleHintFromNode(node: TiptapNode): string | undefined {
+  return typeof node.attrs?.blockRoleHint === "string" ? node.attrs.blockRoleHint : undefined;
+}
+
 function isBlockRole(value: unknown): value is BlockRole {
   return (
     value === "lead" ||
     value === "keyQuote" ||
     value === "emphasis" ||
     value === "steps" ||
-    value === "summary"
+    value === "summary" ||
+    value === "tip" ||
+    value === "imageSlot"
   );
 }
 

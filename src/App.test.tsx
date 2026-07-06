@@ -1,9 +1,13 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
 
 describe("App", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
   it("shows the core writing and layout workbench controls", () => {
     render(<App />);
 
@@ -26,7 +30,23 @@ describe("App", () => {
 
     expect(await screen.findByLabelText("写作工具栏", {}, { timeout: 20000 })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "插入多图" }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.queryByLabelText("块角色")).not.toBeInTheDocument();
   }, 20000);
+
+  it("shows insertion tools and block roles in the layout editor toolbar", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: "写作台" }));
+    expect(await screen.findByLabelText("写作工具栏", {}, { timeout: 10000 })).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole("button", { name: "复制到排版台" })[0]);
+
+    expect(await screen.findByLabelText("排版工具栏")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "分隔线" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "表格" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "图片" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "插入多图" })).toBeInTheDocument();
+    expect(screen.getByLabelText("块角色")).toBeInTheDocument();
+  });
 
   it("opens model settings in a topbar dialog instead of the writer sidebar", async () => {
     const { container } = render(<App />);

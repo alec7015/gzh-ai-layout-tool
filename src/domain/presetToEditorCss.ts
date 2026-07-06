@@ -125,6 +125,16 @@ ${scope} [data-block-role="keyQuote"] {
 ${scope} [data-block-role="steps"] {
   background: ${preset.palette.secondary};
 }
+${scope} [data-block-role="tip"] {
+  background: ${preset.palette.secondary};
+  border: 1px solid ${preset.palette.primary}33;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+${scope} [data-block-role="imageSlot"] {
+  outline: 1px dashed ${preset.palette.textSub};
+  outline-offset: 8px;
+}
 `;
 }
 

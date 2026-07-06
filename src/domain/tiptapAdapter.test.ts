@@ -206,13 +206,21 @@ describe("tiptapAdapter", () => {
     });
   });
 
-  it("preserves block roles across Tiptap round trips", () => {
+  it("preserves block roles and role hints across Tiptap round trips", () => {
     const article: ArticleAst = {
       meta: { title: "角色标注" },
       blocks: [
         { id: "title-1", type: "title", text: "角色标注", style: {} },
         { id: "p-lead", type: "paragraph", runs: [{ text: "开头引言" }], role: "lead", style: {} },
         { id: "quote-key", type: "quote", text: "关键金句", role: "keyQuote", style: {} },
+        {
+          id: "p-image",
+          type: "paragraph",
+          runs: [{ text: "配图建议段" }],
+          role: "imageSlot",
+          roleHint: "清晨桌面图",
+          style: {},
+        },
       ],
     };
 
@@ -221,7 +229,9 @@ describe("tiptapAdapter", () => {
 
     expect(doc.content[1].attrs).toMatchObject({ blockRole: "lead" });
     expect(doc.content[2].attrs).toMatchObject({ blockRole: "keyQuote" });
+    expect(doc.content[3].attrs).toMatchObject({ blockRole: "imageSlot", blockRoleHint: "清晨桌面图" });
     expect(restored.blocks[1]).toMatchObject({ role: "lead" });
     expect(restored.blocks[2]).toMatchObject({ role: "keyQuote" });
+    expect(restored.blocks[3]).toMatchObject({ role: "imageSlot", roleHint: "清晨桌面图" });
   });
 });

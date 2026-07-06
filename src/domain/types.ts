@@ -12,7 +12,7 @@ export type BlockType =
 export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike";
 
 export type BlockOverride = Record<string, string | number | boolean | null>;
-export type BlockRole = "lead" | "keyQuote" | "emphasis" | "steps" | "summary";
+export type BlockRole = "lead" | "keyQuote" | "emphasis" | "steps" | "summary" | "tip" | "imageSlot";
 
 export interface TextRun {
   text: string;
@@ -30,6 +30,7 @@ export interface BaseBlock {
   type: BlockType;
   style?: BlockOverride;
   role?: BlockRole;
+  roleHint?: string;
 }
 
 export interface TitleBlock extends BaseBlock {
@@ -197,5 +198,6 @@ export interface LayoutPlan {
   blocks?: Array<{
     blockId: string;
     role: BlockRole;
+    hint?: string;
   }>;
 }

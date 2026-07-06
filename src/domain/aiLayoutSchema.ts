@@ -20,13 +20,15 @@ const allowedOverridePrefixes = [
   "decorations.footerText",
 ];
 const legacyComponentPrefix = /^(title|heading|quote|list|emphasis|divider|image)\./;
-const blockRoles: BlockRole[] = ["lead", "keyQuote", "emphasis", "steps", "summary"];
+const blockRoles: BlockRole[] = ["lead", "keyQuote", "emphasis", "steps", "summary", "tip", "imageSlot"];
 const roleQuota: Record<BlockRole, number> = {
   lead: 1,
   keyQuote: 2,
   emphasis: 3,
   steps: 2,
   summary: 1,
+  tip: 2,
+  imageSlot: 3,
 };
 
 export function buildLayoutRequest(article: ArticleAst): ChatCompletionRequest {
@@ -81,7 +83,7 @@ export function buildLayoutPlanRequest(
           `请生成 2-3 套排版方案。\n` +
           `可选 styleId｜名称｜moods：\n${styleOptions}\n\n` +
           `组件变体词汇表：\n${componentVocabulary}\n\n` +
-          `role 枚举：lead(首段) / keyQuote(金句) / emphasis(重点段) / steps(步骤列表) / summary(小结)。role 宁缺毋滥。\n` +
+          `role 枚举：lead(首段) / keyQuote(金句) / emphasis(重点段) / steps(步骤列表) / summary(小结) / tip：操作提醒/注意事项段落 / imageSlot：该段之后适合配一张图，hint 用一句话描述建议的画面。role 宁缺毋滥。\n` +
           `输出示例：{"plans":[{"styleId":"listicle_cards","reason":"干货结构清晰","palette":{"primary":"#2B6CB0"},"components":{"heading":"chapter-badge","quote":"golden-card"},"blocks":[{"blockId":"p-1","role":"lead"}]}]}\n\n` +
           `文章块：\n${blockList}`,
       },
@@ -216,6 +218,8 @@ function coercePlanBlocks(value: unknown, blockMap: Map<string, ArticleBlock>) {
     emphasis: 0,
     steps: 0,
     summary: 0,
+    tip: 0,
+    imageSlot: 0,
   };
   const result: NonNullable<LayoutPlan["blocks"]> = [];
 
@@ -231,7 +235,13 @@ function coercePlanBlocks(value: unknown, blockMap: Map<string, ArticleBlock>) {
       return;
     }
     counts[item.role] += 1;
-    result.push({ blockId: item.blockId, role: item.role });
+    result.push({
+      blockId: item.blockId,
+      role: item.role,
+      ...(item.role === "imageSlot" && typeof item.hint === "string"
+        ? { hint: item.hint.trim().slice(0, 40) }
+        : {}),
+    });
   });
 
   return result;
@@ -285,6 +295,9 @@ function isRoleCompatible(role: BlockRole, block: ArticleBlock) {
   }
   if (role === "steps") {
     return block.type === "list";
+  }
+  if (role === "tip" || role === "imageSlot") {
+    return block.type === "paragraph";
   }
   return block.type === "paragraph" || block.type === "list";
 }

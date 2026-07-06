@@ -7,7 +7,7 @@
 - GitHub 仓库：https://github.com/alec7015/gzh-ai-layout-tool
 - 在线预览：https://alec7015.github.io/gzh-ai-layout-tool/
 - 源码 ZIP：https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/main.zip
-- 自动化源码索引：https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/main/SOURCE_INDEX.md
+- 自动化源码索引：https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/main/SOURCE_INDEX.md
 - 递归源码树 API：https://api.github.com/repos/alec7015/gzh-ai-layout-tool/git/trees/main?recursive=1
 
 部分平台会限制直接抓取 GitHub 的 `tree/main/子目录`、`commits/` 等 HTML 页面，这是 GitHub 的 robots 策略，不是仓库私有或分支权限问题。需要给自动化工具读取源码时，请优先使用 `SOURCE_INDEX.md`、GitHub API、raw 单文件链接或源码 ZIP，不要依赖目录 HTML 页面。

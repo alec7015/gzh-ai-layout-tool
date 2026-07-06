@@ -26,13 +26,13 @@ Each API entry includes a `path`, `type`, and `url`. For file contents, either
 use the `download_url` from the contents API or construct a raw URL like this:
 
 ```text
-https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/main/<path>
+https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/main/<path>
 ```
 
 Example:
 
 ```text
-https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/main/src/App.tsx
+https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/main/src/App.tsx
 ```
 
 ## Archive download

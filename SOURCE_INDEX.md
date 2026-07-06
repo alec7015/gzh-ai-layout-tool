@@ -8,31 +8,31 @@ HTML pages.
 ## Branch
 
 - Repository: https://github.com/alec7015/gzh-ai-layout-tool
-- Branch: `codex/v5-layout-plan`
-- Branch URL: https://github.com/alec7015/gzh-ai-layout-tool/tree/codex/v5-layout-plan
+- Branch: `main`
+- Branch URL: https://github.com/alec7015/gzh-ai-layout-tool/tree/main
 
 ## Machine-readable file discovery
 
 Use GitHub API JSON instead of GitHub `/tree/` HTML pages:
 
 - Recursive source tree:
-  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/git/trees/codex%2Fv5-layout-plan?recursive=1
+  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/git/trees/main?recursive=1
 - `src/` directory JSON:
-  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/contents/src?ref=codex/v5-layout-plan
+  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/contents/src?ref=main
 - `src-tauri/` directory JSON:
-  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/contents/src-tauri?ref=codex/v5-layout-plan
+  https://api.github.com/repos/alec7015/gzh-ai-layout-tool/contents/src-tauri?ref=main
 
 Each API entry includes a `path`, `type`, and `url`. For file contents, either
 use the `download_url` from the contents API or construct a raw URL like this:
 
 ```text
-https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/codex/v5-layout-plan/<path>
+https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/main/<path>
 ```
 
 Example:
 
 ```text
-https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/codex/v5-layout-plan/src/App.tsx
+https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/main/src/App.tsx
 ```
 
 ## Archive download
@@ -40,9 +40,9 @@ https://raw.githubusercontent.com/alec7015/gzh-ai-layout-tool/refs/heads/codex/v
 If the environment can download a single archive but cannot crawl pages, use:
 
 - ZIP:
-  https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/codex/v5-layout-plan.zip
+  https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/main.zip
 - TAR.GZ:
-  https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/codex/v5-layout-plan.tar.gz
+  https://github.com/alec7015/gzh-ai-layout-tool/archive/refs/heads/main.tar.gz
 
 ## Important source roots
 

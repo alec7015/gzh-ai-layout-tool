@@ -59,6 +59,14 @@ describe("aiWriting", () => {
 
     expect(article?.meta.title).toBe("标题");
     expect(article?.blocks.map((block) => block.type)).toEqual(["title", "paragraph", "heading", "list"]);
+    expect(article?.blocks[2]).toMatchObject({ type: "heading", level: 1 });
+  });
+
+  it("asks AI writers to use level-one headings for article sections", () => {
+    const request = buildWritingRequest({ topic: "测试", style: "清晰", words: 500 });
+
+    expect(request.messages[0].content).toContain("小节标题必须用一个 #");
+    expect(request.messages[0].content).toContain("不要用 ## 作为小节标题");
   });
 
   it("protects image blocks from AI prompts and restores them by placeholders", () => {

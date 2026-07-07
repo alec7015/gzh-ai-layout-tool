@@ -15,7 +15,7 @@ export type AiErrorCode =
   | "aborted";
 
 export type AiResult<T> =
-  | { ok: true; data: T; rawText?: string }
+  | { ok: true; data: T; rawText?: string; finishReason?: string }
   | { ok: false; code: AiErrorCode; message: string; status?: number; rawText?: string };
 
 export interface AiCallOptions {
@@ -31,7 +31,18 @@ interface ChatCompletionResponse {
     delta?: {
       content?: string;
     };
+    finish_reason?: string;
   }>;
+}
+
+interface ChatTextResult {
+  content: string;
+  finishReason?: string;
+}
+
+interface JsonRetryState {
+  retriedEscalation?: boolean;
+  retriedCorrection?: boolean;
 }
 
 /** 是否运行在 Tauri 桌面端。桌面端经 tauri-plugin-http 直连模型，不受浏览器 CORS 限制。 */
@@ -60,7 +71,7 @@ export async function callChatCompletionsJson<T>(
   request: ChatCompletionRequest,
   fetcher?: FetchLike,
   options?: AiCallOptions,
-  retriedCorrection = false
+  retryState: JsonRetryState = {}
 ): Promise<AiResult<T>> {
   const textResult = await callChatCompletionsText(settings, request, fetcher, options);
   if (!textResult.ok) {
@@ -69,14 +80,30 @@ export async function callChatCompletionsJson<T>(
 
   const data = safeJsonParse<T>(textResult.data);
   if (!data) {
-    const code = classifyParseFailure(textResult.data);
-    if (!retriedCorrection && code === "parse-truncated" && request.response_format) {
+    const code = classifyParseFailure(textResult.data, textResult.finishReason);
+    if (!retryState.retriedEscalation && code === "parse-truncated") {
+      const previousMaxTokens = typeof request.max_tokens === "number" && Number.isFinite(request.max_tokens)
+        ? request.max_tokens
+        : settings.maxTokens;
+      return callChatCompletionsJson<T>(
+        settings,
+        {
+          ...request,
+          stream: false,
+          max_tokens: Math.min(Math.max(previousMaxTokens * 2, previousMaxTokens + 1024), 32000),
+        },
+        fetcher,
+        options,
+        { ...retryState, retriedEscalation: true }
+      );
+    }
+    if (!retryState.retriedCorrection && (code === "parse" || code === "parse-nonjson")) {
       return callChatCompletionsJson<T>(
         settings,
         buildJsonCorrectionRequest(request, textResult.data),
         fetcher,
         options,
-        true
+        { ...retryState, retriedCorrection: true }
       );
     }
     return {
@@ -91,7 +118,7 @@ export async function callChatCompletionsJson<T>(
     };
   }
 
-  return { ok: true, data, rawText: textResult.data };
+  return { ok: true, data, rawText: textResult.data, ...(textResult.finishReason ? { finishReason: textResult.finishReason } : {}) };
 }
 
 export async function callChatCompletionsText(
@@ -126,7 +153,12 @@ export async function callChatCompletionsText(
     if (!response.ok) {
       const rawText = await safeResponseText(response);
       if (shouldRetryWithoutResponseFormat(response.status, rawText, body)) {
-        return callChatCompletionsText(settings, { ...request, response_format: undefined }, doFetch, options);
+        return callChatCompletionsText(
+          settings,
+          addJsonOnlyInstruction({ ...request, response_format: undefined }),
+          doFetch,
+          options
+        );
       }
       return {
         ok: false,
@@ -137,11 +169,16 @@ export async function callChatCompletionsText(
       };
     }
 
-    const content =
+    const result =
       request.stream && response.body
         ? await readSseText(response.body, options.onDelta)
         : await readChatCompletionText(response);
-    return { ok: true, data: content, rawText: content };
+    return {
+      ok: true,
+      data: result.content,
+      rawText: result.content,
+      ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+    };
   } catch (error) {
     return mapFetchError(error, options.signal);
   }
@@ -160,12 +197,31 @@ export function safeJsonParse<T>(input: string): T | null {
   }
 }
 
-function classifyParseFailure(input: string): Extract<AiErrorCode, "parse" | "parse-truncated" | "parse-nonjson"> {
+function classifyParseFailure(
+  input: string,
+  finishReason?: string
+): Extract<AiErrorCode, "parse" | "parse-truncated" | "parse-nonjson"> {
+  if (finishReason === "length") {
+    return "parse-truncated";
+  }
   const cleaned = precleanModelText(input);
   if (/^\s*[{[]/.test(cleaned) && !extractBalancedJson(cleaned)) {
     return "parse-truncated";
   }
   return /[{[]/.test(cleaned) ? "parse" : "parse-nonjson";
+}
+
+function addJsonOnlyInstruction(request: ChatCompletionRequest): ChatCompletionRequest {
+  return {
+    ...request,
+    messages: [
+      {
+        role: "system",
+        content: "严格只输出 JSON 本体：以 { 开始、以 } 结束，禁止任何解释、思考过程与 markdown 围栏。",
+      },
+      ...request.messages,
+    ],
+  };
 }
 
 function buildJsonCorrectionRequest(request: ChatCompletionRequest, rawText: string): ChatCompletionRequest {
@@ -215,22 +271,31 @@ function shouldOmitTemperature(settings: AiSettings): boolean {
   return settings.provider === "kimi" && settings.model.trim().toLowerCase() === "kimi-k2.6";
 }
 
-async function readChatCompletionText(response: Response): Promise<string> {
+async function readChatCompletionText(response: Response): Promise<ChatTextResult> {
   if (typeof response.json === "function") {
     const payload = (await response.json()) as ChatCompletionResponse;
-    return payload.choices?.[0]?.message?.content ?? "";
+    const choice = payload.choices?.[0];
+    return {
+      content: choice?.message?.content ?? "",
+      ...(choice?.finish_reason ? { finishReason: choice.finish_reason } : {}),
+    };
   }
 
   const raw = await safeResponseText(response);
   const payload = safeJsonParse<ChatCompletionResponse>(raw);
-  return payload?.choices?.[0]?.message?.content ?? raw;
+  const choice = payload?.choices?.[0];
+  return {
+    content: choice?.message?.content ?? raw,
+    ...(choice?.finish_reason ? { finishReason: choice.finish_reason } : {}),
+  };
 }
 
-async function readSseText(body: ReadableStream<Uint8Array>, onDelta?: (delta: string) => void): Promise<string> {
+async function readSseText(body: ReadableStream<Uint8Array>, onDelta?: (delta: string) => void): Promise<ChatTextResult> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let output = "";
+  let finishReason: string | undefined;
 
   while (true) {
     const { value, done } = await reader.read();
@@ -243,25 +308,31 @@ async function readSseText(body: ReadableStream<Uint8Array>, onDelta?: (delta: s
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      const delta = parseSsePart(part);
-      if (delta === null) {
+      const parsed = parseSsePart(part);
+      if (parsed === null) {
         continue;
       }
-      output += delta;
-      onDelta?.(delta);
+      output += parsed.content;
+      finishReason = parsed.finishReason ?? finishReason;
+      if (parsed.content) {
+        onDelta?.(parsed.content);
+      }
     }
   }
 
   const tail = parseSsePart(buffer);
   if (tail) {
-    output += tail;
-    onDelta?.(tail);
+    output += tail.content;
+    finishReason = tail.finishReason ?? finishReason;
+    if (tail.content) {
+      onDelta?.(tail.content);
+    }
   }
 
-  return output;
+  return { content: output, ...(finishReason ? { finishReason } : {}) };
 }
 
-function parseSsePart(part: string): string | null {
+function parseSsePart(part: string): ChatTextResult | null {
   const dataLines = part
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -269,16 +340,19 @@ function parseSsePart(part: string): string | null {
     .map((line) => line.replace(/^data:\s*/, ""));
 
   let content = "";
+  let finishReason: string | undefined;
   for (const data of dataLines) {
     if (!data || data === "[DONE]") {
       continue;
     }
 
     const payload = safeJsonParse<ChatCompletionResponse>(data);
-    content += payload?.choices?.[0]?.delta?.content ?? payload?.choices?.[0]?.message?.content ?? "";
+    const choice = payload?.choices?.[0];
+    content += choice?.delta?.content ?? choice?.message?.content ?? "";
+    finishReason = choice?.finish_reason ?? finishReason;
   }
 
-  return content || null;
+  return content || finishReason ? { content, ...(finishReason ? { finishReason } : {}) } : null;
 }
 
 async function safeResponseText(response: Response): Promise<string> {

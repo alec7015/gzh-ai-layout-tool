@@ -16,6 +16,7 @@ export const BlockMeta = Extension.create({
           "horizontalRule",
           "imageGrid",
           "image",
+          "codeBlock",
         ],
         attributes: {
           blockId: {

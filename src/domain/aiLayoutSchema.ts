@@ -98,8 +98,8 @@ export function buildLayoutPlanRequest(
           `请生成 2-3 套排版方案。\n` +
           `可选 styleId｜名称｜moods：\n${styleOptions}\n\n` +
           `组件变体词汇表：\n${componentVocabulary}\n\n` +
-          `role 枚举：summary(小结) / tip：操作提醒/注意事项段落 / pullquote(引言卡) / quoteCenter(居中金句) / data(数据卡) / step(步骤标签) / toolLabel(工具标签) / sidenote(旁注) / editorNote(编者按) / toc(目录卡) / signature(签名卡)。兼容旧角色：lead / keyQuote / emphasis / steps / imageSlot：该段之后适合配一张图，hint 用一句话描述建议画面。role 宁缺毋滥。\n` +
-          `输出示例：{"plans":[{"styleId":"listicle_cards","reason":"干货结构清晰","palette":{"primary":"#2B6CB0"},"components":{"heading":"chapter-badge","quote":"golden-card"},"blocks":[{"blockId":"p-1","role":"lead"}]}]}\n\n` +
+          `role 枚举：summary(小结) / tip：操作提醒/注意事项段落 / pullquote(引言卡) / quoteCenter(居中金句) / data(数据卡) / step(步骤标签) / toolLabel(工具标签) / sidenote(旁注) / editorNote(编者按) / toc(目录卡) / signature(签名卡)。兼容旧角色：lead / keyQuote / emphasis / steps / imageSlot：该段之后适合配一张图，hint 用一句话描述建议画面。请积极为内容分配 role：每 3-5 个段落至少 1 个。结论段→summary，含关键数字的短段→data，操作提醒→tip，可独立成金句的短句→pullquote 或 quoteCenter，步骤列表→step，文末作者信息→signature。同一 role 全文不超过 3 次。\n` +
+          `输出示例：{"plans":[{"styleId":"listicle_cards","reason":"干货结构清晰","palette":{"primary":"#2B6CB0"},"components":{"heading":"chapter-badge","quote":"golden-card"},"blocks":[{"blockId":"p-2","role":"lead"},{"blockId":"p-5","role":"data"},{"blockId":"p-8","role":"tip"},{"blockId":"p-12","role":"summary"}]}]}\n\n` +
           `文章块：\n${blockList}`,
       },
     ],

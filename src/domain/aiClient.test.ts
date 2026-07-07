@@ -113,7 +113,9 @@ describe("aiClient", () => {
 
     expect(result).toEqual({ ok: true, data: "重试成功", rawText: "重试成功" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).not.toHaveProperty("response_format");
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody).not.toHaveProperty("response_format");
+    expect(retryBody.messages[0].content).toContain("严格只输出 JSON 本体");
   });
 
   it("parses streamed SSE chat completion chunks", async () => {
@@ -166,12 +168,12 @@ describe("aiClient", () => {
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty("temperature");
   });
 
-  it("returns precise parse errors and retries once with correction instructions", async () => {
+  it("escalates max tokens for truncated JSON without replaying partial assistant output", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ choices: [{ message: { content: '{"title":"断掉"' }, finish_reason: "length" }] }),
+        json: async () => ({ choices: [{ message: { content: "不是 JSON 但被截断" }, finish_reason: "length" }] }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -180,19 +182,46 @@ describe("aiClient", () => {
 
     const result = await callChatCompletionsJson<{ title: string }>(
       { ...createDefaultAiSettings(), apiKey: "secret" },
-      { ...buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }), response_format: { type: "json_object" } },
+      { ...buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }), max_tokens: 4096, response_format: { type: "json_object" } },
       fetchMock
     );
 
     expect(result).toEqual({ ok: true, data: { title: "修复" }, rawText: '{"title":"修复"}' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody.max_tokens).toBe(8192);
+    expect(retryBody.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: expect.not.stringContaining("修正为完整 JSON"),
+    });
+  });
+
+  it("retries non-json parse failures once with correction instructions", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: "不是 JSON" } }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '{"title":"纠正"}' } }] }),
+      });
+
+    const result = await callChatCompletionsJson<{ title: string }>(
+      { ...createDefaultAiSettings(), apiKey: "secret" },
+      buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+      fetchMock
+    );
+
+    expect(result).toEqual({ ok: true, data: { title: "纠正" }, rawText: '{"title":"纠正"}' });
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).messages.at(-1)).toMatchObject({
       role: "user",
       content: expect.stringContaining("修正为完整 JSON"),
     });
   });
 
-  it("classifies non-json parse failures without retry loops", async () => {
+  it("classifies non-json parse failures after a failed correction retry", async () => {
     const result = await callChatCompletionsJson<{ title: string }>(
       { ...createDefaultAiSettings(), apiKey: "secret" },
       buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),

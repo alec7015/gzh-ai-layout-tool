@@ -1,4 +1,4 @@
-import { astToMarkdown, markdownToAst } from "./draftStore";
+import { astToMarkdown, markdownToAst, normalizeHeadingLevels } from "./draftStore";
 import type { ArticleAst, ArticleBlock } from "./types";
 
 export interface WritingRequestInput {
@@ -32,7 +32,7 @@ export interface ProtectedArticleMarkdown {
 
 const WRITING_SYSTEM_PROMPT = `你是资深微信公众号主笔。直接输出文章正文，使用且仅使用以下 Markdown 语法：
 - 第一行必须是文章标题，格式：# 标题
-- 小节标题使用 # 小节，子小节可使用 ## 或 ###，最多到 ###
+- 小节标题必须用一个 #（例：# 准备工作），不要用 ## 作为小节标题；子小节才用 ##/###，最多到 ###
 - 列表使用 - 或 1.
 - 引用使用 >
 - 加粗使用 **文字**，斜体使用 *文字*
@@ -101,7 +101,7 @@ export function coerceMarkdownArticle(input: string, _options: CoerceMarkdownOpt
   }
 
   const normalized = firstContentLineIsHeading(markdown) ? markdown : `# 未命名草稿\n\n${markdown}`;
-  return markdownToAst(normalized, { strictHeadings: true });
+  return normalizeHeadingLevels(markdownToAst(normalized, { strictHeadings: true }));
 }
 
 export function protectArticleImagesForAi(article: ArticleAst): ProtectedArticleMarkdown {

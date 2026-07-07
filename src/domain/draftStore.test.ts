@@ -5,6 +5,7 @@ import {
   createSampleArticle,
   loadDraft,
   markdownToAst,
+  normalizeHeadingLevels,
   plainTextToAst,
   saveDraft,
 } from "./draftStore";
@@ -172,5 +173,27 @@ describe("draftStore", () => {
     expect(markdown).toContain("# 一级标题");
     expect(markdown).toContain("## 二级标题");
     expect(markdown).toContain("### 三级标题");
+  });
+
+  it("normalizes imported heading levels when the article has no level-one headings", () => {
+    const article = markdownToAst("# 标题\n\n## 第一节\n\n### 子节", { strictHeadings: true });
+    const normalized = normalizeHeadingLevels(article);
+    const normalizedAgain = normalizeHeadingLevels(normalized);
+
+    expect(normalized.blocks[1]).toMatchObject({ type: "heading", level: 1, text: "第一节" });
+    expect(normalized.blocks[2]).toMatchObject({ type: "heading", level: 2, text: "子节" });
+    expect(normalizedAgain).toEqual(normalized);
+  });
+
+  it("does not normalize headings when a level-one heading already exists", () => {
+    const article = markdownToAst("# 标题\n\n# 一级\n\n## 二级", { strictHeadings: true });
+
+    expect(normalizeHeadingLevels(article)).toEqual(article);
+  });
+
+  it("leaves articles without headings unchanged", () => {
+    const article = markdownToAst("# 标题\n\n正文", { strictHeadings: true });
+
+    expect(normalizeHeadingLevels(article)).toEqual(article);
   });
 });

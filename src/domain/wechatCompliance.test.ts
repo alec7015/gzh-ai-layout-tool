@@ -44,6 +44,7 @@ describe("wechatCompliance", () => {
   it("rejects platform and WebKit unsafe output", () => {
     const html = [
       '<div class="x" id="bad" style="display:grid;color:oklch(1 0 0);position:absolute">',
+      '<span style="float:left">x</span>',
       '<style>.x{}</style><script>alert(1)</script>',
       "<span style='background:url(data:image/svg+xml,<svg fill=#fff></svg>);backdrop-filter:blur(4px)'>x</span>",
       "</div>",

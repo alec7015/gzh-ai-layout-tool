@@ -35,6 +35,7 @@ import { createCustomStyle, loadCustomStyles, saveCustomStyles } from "./domain/
 import {
   astToPlainText,
   createSampleArticle,
+  normalizeHeadingLevels,
   plainTextToAst,
   saveDraft,
 } from "./domain/draftStore";
@@ -376,7 +377,7 @@ export default function App() {
       if (!result.ok) {
         if (result.code === "aborted") {
           if (streamedText.trim()) {
-            const partialArticle = coerceMarkdownArticle(streamedText) ?? plainTextToAst(streamedText);
+            const partialArticle = coerceMarkdownArticle(streamedText) ?? normalizeHeadingLevels(plainTextToAst(streamedText));
             openArticle(partialArticle);
             setFeedback(createFeedback("info", "已停止生成，并保留已生成的内容。"));
           } else {
@@ -393,7 +394,7 @@ export default function App() {
       flushStreamToEditor(true);
       const aiArticle = coerceMarkdownArticle(result.data);
       if (!aiArticle) {
-        openArticle(plainTextToAst(result.data));
+        openArticle(normalizeHeadingLevels(plainTextToAst(result.data)));
         setFeedback(createFeedback("info", "模型返回未按 Markdown 结构，已按纯文本导入，可手动整理或再次点 AI 智能排版。"));
         return;
       }

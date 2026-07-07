@@ -55,6 +55,25 @@ export function plainTextToAst(input: string): ArticleAst {
   return markdownToAst(input);
 }
 
+export function normalizeHeadingLevels(article: ArticleAst): ArticleAst {
+  const headings = article.blocks.filter((block): block is Extract<ArticleBlock, { type: "heading" }> => block.type === "heading");
+  if (headings.length === 0) {
+    return article;
+  }
+  if (headings.some((block) => (block.level ?? 1) === 1)) {
+    return article;
+  }
+
+  return {
+    ...article,
+    blocks: article.blocks.map((block) =>
+      block.type === "heading"
+        ? { ...block, level: Math.max(1, (block.level ?? 1) - 1) as 1 | 2 | 3 }
+        : block
+    ),
+  };
+}
+
 export function markdownToAst(input: string, options: MarkdownParseOptions = {}): ArticleAst {
   const lines = input
     .split(/\r?\n/)

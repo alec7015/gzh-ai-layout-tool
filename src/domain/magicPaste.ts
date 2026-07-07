@@ -1,6 +1,6 @@
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
-import { markdownToAst } from "./draftStore";
+import { markdownToAst, normalizeHeadingLevels } from "./draftStore";
 import type { ArticleAst } from "./types";
 
 const turndown = new TurndownService({
@@ -16,5 +16,5 @@ export function htmlToCleanMarkdown(html: string): string {
 }
 
 export function htmlToCleanArticle(html: string): ArticleAst {
-  return markdownToAst(htmlToCleanMarkdown(html));
+  return normalizeHeadingLevels(markdownToAst(htmlToCleanMarkdown(html), { strictHeadings: true }));
 }

@@ -19,6 +19,10 @@ describe("htmlToCleanArticle", () => {
       "list",
       "table",
     ]);
+    expect(article.blocks[1]).toMatchObject({ type: "paragraph" });
+
+    const headingArticle = htmlToCleanArticle("<h1>标题</h1><h2>正文小节</h2><p>正文</p>");
+    expect(headingArticle.blocks[1]).toMatchObject({ type: "heading", level: 1 });
 
     const html = renderWechatHtml(article, defaultStylePreset);
     expect(html).toContain("重点");

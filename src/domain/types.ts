@@ -9,10 +9,37 @@ export type BlockType =
   | "table"
   | "divider";
 
-export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike";
+export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike" | "keyword";
 
 export type BlockOverride = Record<string, string | number | boolean | null>;
-export type BlockRole = "lead" | "keyQuote" | "emphasis" | "steps" | "summary" | "tip" | "imageSlot";
+export type BlockRole =
+  | "summary"
+  | "tip"
+  | "pullquote"
+  | "quoteCenter"
+  | "data"
+  | "step"
+  | "toolLabel"
+  | "sidenote"
+  | "editorNote"
+  | "toc"
+  | "signature"
+  | "lead"
+  | "keyQuote"
+  | "emphasis"
+  | "steps"
+  | "imageSlot";
+
+export type ArticleType = "tutorial" | "review" | "opinion" | "news" | "listicle" | "generic";
+
+export interface LayoutPlanV2 {
+  version: 2;
+  articleType: ArticleType;
+  blocks: Array<{ index: number; role?: BlockRole; keywords?: string[] }>;
+  pullQuotes?: Array<{ sourceIndex: number; text: string }>;
+  enableToc?: boolean;
+  overrides?: StyleOverrides;
+}
 
 export interface TextRun {
   text: string;

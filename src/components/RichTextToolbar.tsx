@@ -360,6 +360,15 @@ export function RichTextToolbar({
         >
           <option value="">角色</option>
           <option value="keyQuote">金句卡</option>
+          <option value="pullquote">引言卡</option>
+          <option value="quoteCenter">居中金句</option>
+          <option value="data">数据卡</option>
+          <option value="step">步骤标签</option>
+          <option value="toolLabel">工具标签</option>
+          <option value="sidenote">名词旁注</option>
+          <option value="editorNote">编者按</option>
+          <option value="toc">目录卡</option>
+          <option value="signature">签名卡</option>
           <option value="emphasis">重点段</option>
           <option value="summary">小结卡</option>
           <option value="tip">提示卡</option>

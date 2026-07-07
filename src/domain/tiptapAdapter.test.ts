@@ -235,6 +235,36 @@ describe("tiptapAdapter", () => {
     expect(restored.blocks[3]).toMatchObject({ role: "imageSlot", roleHint: "清晨桌面图" });
   });
 
+  it("round trips keyword marks without losing text structure", () => {
+    const article: ArticleAst = {
+      meta: { title: "关键词" },
+      blocks: [
+        { id: "title-1", type: "title", text: "关键词", style: {} },
+        {
+          id: "p-keyword",
+          type: "paragraph",
+          runs: [
+            { text: "普通" },
+            { text: "关键词", marks: ["keyword"] },
+          ],
+          style: {},
+        },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1].content?.[1].marks).toEqual([{ type: "keyword" }]);
+    expect(restored.blocks[1]).toMatchObject({
+      type: "paragraph",
+      runs: [
+        { text: "普通" },
+        { text: "关键词", marks: ["keyword"] },
+      ],
+    });
+  });
+
   it("keeps a title block first when pasted content appears before the original title", () => {
     const restored = tiptapDocToAst(
       {

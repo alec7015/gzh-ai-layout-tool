@@ -2,14 +2,17 @@ import { astToMarkdown } from "./draftStore";
 import { stylePresets, VARIANT_VOCABULARY } from "./stylePresets";
 import type { ChatCompletionRequest } from "./aiWriting";
 import type {
+  ArticleType,
   ArticleAst,
   ArticleBlock,
   BlockRole,
   LayoutPlan,
+  LayoutPlanV2,
   LayoutRecommendation,
   StyleOverrides,
   StylePreset,
 } from "./types";
+import { clampRolesToRecipe, getRecipe } from "./recipes";
 
 const allowedStyleIds = new Set(stylePresets.map((preset) => preset.id));
 const allowedOverridePrefixes = [
@@ -20,7 +23,37 @@ const allowedOverridePrefixes = [
   "decorations.footerText",
 ];
 const legacyComponentPrefix = /^(title|heading|quote|list|emphasis|divider|image)\./;
-const blockRoles: BlockRole[] = ["lead", "keyQuote", "emphasis", "steps", "summary", "tip", "imageSlot"];
+const blockRoles: BlockRole[] = [
+  "lead",
+  "keyQuote",
+  "emphasis",
+  "steps",
+  "summary",
+  "tip",
+  "imageSlot",
+  "pullquote",
+  "quoteCenter",
+  "data",
+  "step",
+  "toolLabel",
+  "sidenote",
+  "editorNote",
+  "toc",
+  "signature",
+];
+const v13BlockRoles: BlockRole[] = [
+  "summary",
+  "tip",
+  "pullquote",
+  "quoteCenter",
+  "data",
+  "step",
+  "toolLabel",
+  "sidenote",
+  "editorNote",
+  "toc",
+  "signature",
+];
 const roleQuota: Record<BlockRole, number> = {
   lead: 1,
   keyQuote: 2,
@@ -29,6 +62,15 @@ const roleQuota: Record<BlockRole, number> = {
   summary: 1,
   tip: 2,
   imageSlot: 3,
+  pullquote: 2,
+  quoteCenter: 2,
+  data: 4,
+  step: 4,
+  toolLabel: 4,
+  sidenote: 2,
+  editorNote: 1,
+  toc: 1,
+  signature: 1,
 };
 
 export function buildLayoutRequest(article: ArticleAst): ChatCompletionRequest {
@@ -83,7 +125,7 @@ export function buildLayoutPlanRequest(
           `请生成 2-3 套排版方案。\n` +
           `可选 styleId｜名称｜moods：\n${styleOptions}\n\n` +
           `组件变体词汇表：\n${componentVocabulary}\n\n` +
-          `role 枚举：lead(首段) / keyQuote(金句) / emphasis(重点段) / steps(步骤列表) / summary(小结) / tip：操作提醒/注意事项段落 / imageSlot：该段之后适合配一张图，hint 用一句话描述建议的画面。role 宁缺毋滥。\n` +
+          `role 枚举：summary(小结) / tip：操作提醒/注意事项段落 / pullquote(引言卡) / quoteCenter(居中金句) / data(数据卡) / step(步骤标签) / toolLabel(工具标签) / sidenote(旁注) / editorNote(编者按) / toc(目录卡) / signature(签名卡)。兼容旧角色：lead / keyQuote / emphasis / steps / imageSlot：该段之后适合配一张图，hint 用一句话描述建议画面。role 宁缺毋滥。\n` +
           `输出示例：{"plans":[{"styleId":"listicle_cards","reason":"干货结构清晰","palette":{"primary":"#2B6CB0"},"components":{"heading":"chapter-badge","quote":"golden-card"},"blocks":[{"blockId":"p-1","role":"lead"}]}]}\n\n` +
           `文章块：\n${blockList}`,
       },
@@ -190,6 +232,110 @@ export function coerceLayoutPlan(
   return plans.length ? plans : null;
 }
 
+export function coerceLayoutPlanV2(value: unknown, article: ArticleAst): LayoutPlanV2 | null {
+  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.blocks)) {
+    return null;
+  }
+
+  const articleType = isArticleType(value.articleType) ? value.articleType : "generic";
+  const recipe = getRecipe(articleType);
+  const seen = new Set<number>();
+  const candidateBlocks: LayoutPlanV2["blocks"] = [];
+
+  for (const item of value.blocks) {
+    if (!isRecord(item) || typeof item.index !== "number" || !Number.isInteger(item.index)) {
+      continue;
+    }
+    if (item.index < 0 || item.index >= article.blocks.length || seen.has(item.index)) {
+      continue;
+    }
+    seen.add(item.index);
+    const text = blockText(article.blocks[item.index]);
+    const role = isV13BlockRole(item.role) ? item.role : undefined;
+    const keywords = coerceKeywords(item.keywords, text, recipe.keywordDensity.maxPerParagraph);
+    if (!role && keywords.length === 0) {
+      continue;
+    }
+    candidateBlocks.push({
+      index: item.index,
+      ...(role ? { role } : {}),
+      ...(keywords.length ? { keywords } : {}),
+    });
+  }
+
+  const blocks = clampRolesToRecipe(articleType, candidateBlocks);
+  const pullQuotes = coercePullQuotes(value.pullQuotes, article);
+  const overrides = coerceSoftOverrides(value.overrides);
+
+  return {
+    version: 2,
+    articleType,
+    blocks,
+    ...(pullQuotes.length ? { pullQuotes } : {}),
+    enableToc: typeof value.enableToc === "boolean" ? value.enableToc : recipe.defaults.enableToc,
+    ...(Object.keys(overrides).length ? { overrides } : {}),
+  };
+}
+
+function coerceKeywords(value: unknown, sourceText: string, limit: number): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const keyword = item.trim();
+    if (!keyword || !sourceText.includes(keyword) || result.includes(keyword)) {
+      continue;
+    }
+    result.push(keyword);
+    if (result.length >= limit) {
+      break;
+    }
+  }
+  return result;
+}
+
+function coercePullQuotes(value: unknown, article: ArticleAst): NonNullable<LayoutPlanV2["pullQuotes"]> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const result: NonNullable<LayoutPlanV2["pullQuotes"]> = [];
+  for (const item of value) {
+    if (!isRecord(item) || typeof item.sourceIndex !== "number" || typeof item.text !== "string") {
+      continue;
+    }
+    if (!Number.isInteger(item.sourceIndex) || item.sourceIndex < 0 || item.sourceIndex >= article.blocks.length) {
+      continue;
+    }
+    const text = item.text.trim();
+    if (!text || !blockText(article.blocks[item.sourceIndex]).includes(text)) {
+      continue;
+    }
+    result.push({ sourceIndex: item.sourceIndex, text });
+    if (result.length >= 2) {
+      break;
+    }
+  }
+  return result;
+}
+
+function coerceSoftOverrides(value: unknown): StyleOverrides {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const overrides: StyleOverrides = {};
+  for (const [key, overrideValue] of Object.entries(value)) {
+    const normalizedKey = normalizeComponentPath(key);
+    if (isSafeOverridePath(normalizedKey) && isSafeOverrideValue(overrideValue)) {
+      overrides[normalizedKey] = overrideValue;
+    }
+  }
+  return overrides;
+}
+
 function coerceComponents(value: unknown): NonNullable<LayoutPlan["components"]> {
   if (!isRecord(value)) {
     return {};
@@ -212,7 +358,7 @@ function coercePlanBlocks(value: unknown, blockMap: Map<string, ArticleBlock>) {
     return [];
   }
 
-  const counts: Record<BlockRole, number> = {
+  const counts: Partial<Record<BlockRole, number>> = {
     lead: 0,
     keyQuote: 0,
     emphasis: 0,
@@ -231,10 +377,11 @@ function coercePlanBlocks(value: unknown, blockMap: Map<string, ArticleBlock>) {
     if (!block || !isRoleCompatible(item.role, block)) {
       return;
     }
-    if (counts[item.role] >= roleQuota[item.role]) {
+    const currentCount = counts[item.role] ?? 0;
+    if (currentCount >= roleQuota[item.role]) {
       return;
     }
-    counts[item.role] += 1;
+    counts[item.role] = currentCount + 1;
     result.push({
       blockId: item.blockId,
       role: item.role,
@@ -284,6 +431,21 @@ function blockText(block: ArticleBlock) {
 }
 
 function isRoleCompatible(role: BlockRole, block: ArticleBlock) {
+  if (role === "toc") {
+    return block.type === "paragraph";
+  }
+  if (role === "signature") {
+    return block.type === "paragraph";
+  }
+  if (role === "pullquote" || role === "quoteCenter") {
+    return block.type === "quote" || block.type === "paragraph";
+  }
+  if (role === "data" || role === "toolLabel" || role === "sidenote" || role === "editorNote") {
+    return block.type === "paragraph";
+  }
+  if (role === "step") {
+    return block.type === "list";
+  }
   if (role === "lead") {
     return block.type === "paragraph";
   }
@@ -315,6 +477,21 @@ function isPlanComponent(value: string): value is keyof NonNullable<LayoutPlan["
 
 function isBlockRole(value: unknown): value is BlockRole {
   return typeof value === "string" && blockRoles.includes(value as BlockRole);
+}
+
+function isV13BlockRole(value: unknown): value is BlockRole {
+  return typeof value === "string" && v13BlockRoles.includes(value as BlockRole);
+}
+
+function isArticleType(value: unknown): value is ArticleType {
+  return (
+    value === "tutorial" ||
+    value === "review" ||
+    value === "opinion" ||
+    value === "news" ||
+    value === "listicle" ||
+    value === "generic"
+  );
 }
 
 function isHex(value: string) {

@@ -6,22 +6,31 @@ export interface RenderWechatOptions {
   includePlaceholders?: boolean;
 }
 
+interface RenderContext {
+  tocItems: Array<{ text: string; level: 1 | 2 | 3 }>;
+}
+
 export function renderWechatHtml(
   article: ArticleAst,
   preset: StylePreset,
   options: RenderWechatOptions = {}
 ): string {
   let headingIndex = 0;
+  const context: RenderContext = {
+    tocItems: article.blocks
+      .filter((block): block is Extract<ArticleBlock, { type: "heading" }> => block.type === "heading")
+      .map((block) => ({ text: block.text, level: block.level ?? 1 })),
+  };
   const body = article.blocks
     .map((block, index) => {
       if (block.type === "heading") {
         if ((block.level ?? 1) === 1) {
           headingIndex += 1;
         }
-        return renderBlockWithPlaceholders(block, preset, index, headingIndex, options);
+        return renderBlockWithPlaceholders(block, preset, index, headingIndex, options, context);
       }
 
-      return renderBlockWithPlaceholders(block, preset, index, headingIndex, options);
+      return renderBlockWithPlaceholders(block, preset, index, headingIndex, options, context);
     })
     .join("");
   const header = renderHeaderDecoration(preset);
@@ -45,9 +54,10 @@ function renderBlockWithPlaceholders(
   preset: StylePreset,
   index: number,
   headingIndex: number,
-  options: RenderWechatOptions
+  options: RenderWechatOptions,
+  context: RenderContext
 ): string {
-  const html = renderBlock(block, preset, index, headingIndex);
+  const html = renderBlock(block, preset, index, headingIndex, context);
   if (options.includePlaceholders && block.role === "imageSlot") {
     return `${html}${renderImageSlot(block.roleHint, preset)}`;
   }
@@ -58,7 +68,8 @@ function renderBlock(
   block: ArticleBlock,
   preset: StylePreset,
   index: number,
-  headingIndex: number
+  headingIndex: number,
+  context: RenderContext
 ): string {
   switch (block.type) {
     case "title":
@@ -66,7 +77,7 @@ function renderBlock(
     case "heading":
       return renderHeading(block.text, preset, headingIndex, block);
     case "paragraph":
-      return renderParagraph(block.runs, preset, index, block);
+      return renderParagraph(block.runs, preset, index, block, context);
     case "quote":
       return renderQuote(block.text, preset, block);
     case "list":
@@ -220,13 +231,46 @@ function renderParagraph(
   runs: TextRun[],
   preset: StylePreset,
   index: number,
-  block: ArticleBlock
+  block: ArticleBlock,
+  context: RenderContext
 ): string {
   const drop = preset.typography.firstLetterDrop && index <= 2;
   const content = runs.map((run) => renderRun(run, preset)).join("");
 
+  if (block.role === "toc") {
+    return renderToc(context.tocItems, preset, block);
+  }
+
   if (block.role === "keyQuote") {
     return renderQuoteContent(content, preset, block, "golden-card", false);
+  }
+
+  if (block.role === "pullquote") {
+    return renderPullQuote(content, preset, block);
+  }
+
+  if (block.role === "quoteCenter") {
+    return renderQuoteCenter(content, preset, block);
+  }
+
+  if (block.role === "data") {
+    return renderDataCard(content, preset, block);
+  }
+
+  if (block.role === "toolLabel") {
+    return renderLabeledCard("工具", content, preset, block);
+  }
+
+  if (block.role === "sidenote") {
+    return renderSidenote(content, preset, block);
+  }
+
+  if (block.role === "editorNote") {
+    return renderLabeledCard("编者按", content, preset, block);
+  }
+
+  if (block.role === "signature") {
+    return renderSignature(content, preset, block);
   }
 
   if (block.role === "emphasis") {
@@ -326,8 +370,150 @@ function renderImageSlot(hint: string | undefined, preset: StylePreset): string 
 }
 
 function renderQuote(text: string, preset: StylePreset, block: ArticleBlock): string {
+  if (block.role === "pullquote") {
+    return renderPullQuote(escapeHtml(text), preset, block);
+  }
+  if (block.role === "quoteCenter") {
+    return renderQuoteCenter(escapeHtml(text), preset, block);
+  }
   const variant = block.role === "keyQuote" ? "golden-card" : preset.components.quote.variant;
   return renderQuoteContent(escapeHtml(text), preset, block, variant, true);
+}
+
+function renderToc(items: RenderContext["tocItems"], preset: StylePreset, block: ArticleBlock): string {
+  const entries = items.length > 0 ? items : [{ text: "正文", level: 1 as const }];
+  const rows = entries
+    .map((item, index) => `<p style="${style({
+      margin: index === entries.length - 1 ? "0" : "0 0 6px",
+      color: preset.palette.textMain,
+      "font-size": "14px",
+      "line-height": "1.7",
+      "padding-left": item.level === 1 ? "0" : item.level === 2 ? "12px" : "24px",
+    })}"><span style="${style({ color: preset.palette.primary, "font-weight": "700", "margin-right": "8px" })}">${String(index + 1).padStart(2, "0")}</span>${escapeHtml(item.text)}</p>`)
+    .join("");
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0`,
+    padding: "14px 16px",
+    background: preset.palette.secondary,
+    "border-radius": "8px",
+    ...toInlineOverride(block.style),
+  })}"><span style="${roleLabelStyle(preset)}">目录</span>${rows}</section>`;
+}
+
+function renderPullQuote(content: string, preset: StylePreset, block: ArticleBlock): string {
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0`,
+    padding: "16px 18px",
+    background: preset.palette.secondary,
+    color: preset.palette.textMain,
+    "border-left": `4px solid ${preset.palette.primary}`,
+    "border-radius": "8px",
+    "font-size": preset.typography.bodySize,
+    "line-height": String(preset.typography.lineHeight),
+    ...toInlineOverride(block.style),
+  })}"><span style="${roleLabelStyle(preset)}">引言</span><span style="${style({
+    display: "block",
+    color: preset.palette.primary,
+    "font-size": "24px",
+    "line-height": "1",
+    "margin-bottom": "4px",
+  })}">❝</span>${content}</section>`;
+}
+
+function renderQuoteCenter(content: string, preset: StylePreset, block: ArticleBlock): string {
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0`,
+    padding: "12px 10px",
+    color: preset.palette.textSub,
+    "text-align": "center",
+    "font-size": increasePx(preset.typography.bodySize, 1),
+    "line-height": String(preset.typography.lineHeight),
+    ...toInlineOverride(block.style),
+  })}"><span style="${style({
+    display: "inline-block",
+    width: "28px",
+    "border-top": `1px solid ${preset.palette.primary}`,
+    "vertical-align": "middle",
+    "margin-right": "10px",
+  })}"></span>${content}<span style="${style({
+    display: "inline-block",
+    width: "28px",
+    "border-top": `1px solid ${preset.palette.primary}`,
+    "vertical-align": "middle",
+    "margin-left": "10px",
+  })}"></span></section>`;
+}
+
+function renderDataCard(content: string, preset: StylePreset, block: ArticleBlock): string {
+  const plain = stripTags(content);
+  const number = plain.match(/[+-]?\d+(?:\.\d+)?\s*%?/)?.[0] ?? "数据";
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0`,
+    padding: "14px 16px",
+    background: preset.palette.secondary,
+    "border-radius": "8px",
+    "border-left": `4px solid ${preset.palette.primary}`,
+    color: preset.palette.textMain,
+    ...toInlineOverride(block.style),
+  })}"><span style="${style({
+    display: "block",
+    color: preset.palette.primary,
+    "font-size": "28px",
+    "line-height": "1.2",
+    "font-weight": "800",
+    "margin-bottom": "6px",
+  })}">${escapeHtml(number)}</span><span style="${style({
+    color: preset.palette.textSub,
+    "font-size": "13px",
+    "line-height": "1.7",
+  })}">${content}</span></section>`;
+}
+
+function renderLabeledCard(label: string, content: string, preset: StylePreset, block: ArticleBlock): string {
+  return `<section style="${style({
+    margin: `0 0 ${preset.rhythm.paragraphGap}`,
+    padding: "12px 14px",
+    background: preset.palette.secondary,
+    color: preset.palette.textMain,
+    "border-radius": "8px",
+    "font-size": preset.typography.bodySize,
+    "line-height": String(preset.typography.lineHeight),
+    ...toInlineOverride(block.style),
+  })}"><span style="${roleLabelStyle(preset)}">${label}</span>${content}</section>`;
+}
+
+function renderSidenote(content: string, preset: StylePreset, block: ArticleBlock): string {
+  return `<section style="${style({
+    margin: `0 0 ${preset.rhythm.paragraphGap}`,
+    padding: "10px 12px",
+    background: preset.palette.secondary,
+    color: preset.palette.textSub,
+    "border-radius": "6px",
+    "font-size": "13px",
+    "line-height": "1.75",
+    ...toInlineOverride(block.style),
+  })}"><span style="${style({
+    color: preset.palette.primary,
+    "font-weight": "700",
+    "margin-right": "6px",
+  })}">旁注</span>${content}</section>`;
+}
+
+function renderSignature(content: string, preset: StylePreset, block: ArticleBlock): string {
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0 0`,
+    padding: "14px 0 0",
+    "border-top": `1px solid ${preset.palette.secondary}`,
+    color: preset.palette.textSub,
+    "font-size": "13px",
+    "line-height": "1.8",
+    "text-align": "right",
+    ...toInlineOverride(block.style),
+  })}"><span style="${style({
+    color: preset.palette.primary,
+    "font-weight": "700",
+    "margin-right": "8px",
+  })}">作者</span>${content}</section>`;
 }
 
 function renderQuoteContent(
@@ -422,6 +608,10 @@ function renderList(
   preset: StylePreset,
   block: ArticleBlock
 ): string {
+  if (block.role === "step") {
+    return renderStepList(items, preset, block);
+  }
+
   const variant = block.role === "steps" ? "number-circle-card" : preset.components.list.variant;
   const tag = ordered ? "ol" : "ul";
   const children = items
@@ -466,6 +656,33 @@ function renderList(
     padding: "0",
     ...toInlineOverride(block.style),
   })}">${children}</${tag}>`;
+}
+
+function renderStepList(items: string[], preset: StylePreset, block: ArticleBlock): string {
+  const children = items
+    .map((item, index) => `<li style="${style({
+      margin: `0 0 ${preset.rhythm.paragraphGap}`,
+      padding: "12px 14px",
+      background: preset.palette.secondary,
+      "border-radius": "8px",
+      color: preset.palette.textMain,
+      "list-style": "none",
+    })}"><span style="${style({
+      display: "inline-block",
+      background: preset.palette.primary,
+      color: "#FFFFFF",
+      "border-radius": "999px",
+      padding: "2px 9px",
+      "font-size": "12px",
+      "font-weight": "700",
+      "margin-right": "8px",
+    })}">步骤 ${index + 1}</span>${escapeHtml(item)}</li>`)
+    .join("");
+  return `<ol style="${style({
+    margin: `${preset.rhythm.paragraphGap} 0 ${preset.rhythm.sectionGap}`,
+    padding: "0",
+    ...toInlineOverride(block.style),
+  })}">${children}</ol>`;
 }
 
 function renderImage(
@@ -656,6 +873,14 @@ function renderRun(run: TextRun, preset: StylePreset): string {
       return `<span style="${style({ "text-decoration": "line-through" })}">${inner}</span>`;
     }
 
+    if (mark === "keyword") {
+      return `<span style="${style({
+        color: run.attrs?.color ?? preset.palette.textMain,
+        "border-bottom": `2px solid ${preset.palette.primary}`,
+        padding: "0 2px",
+      })}">${inner}</span>`;
+    }
+
     if (preset.components.emphasis.variant === "underline-accent") {
       return `<span style="${style({
         ...(run.attrs?.color ? {} : { color: preset.palette.textMain }),
@@ -669,6 +894,23 @@ function renderRun(run: TextRun, preset: StylePreset): string {
       padding: "0 3px",
     })}">${inner}</span>`;
   }, content);
+}
+
+function roleLabelStyle(preset: StylePreset): string {
+  return style({
+    display: "inline-block",
+    background: preset.palette.primary,
+    color: "#FFFFFF",
+    "border-radius": "4px",
+    padding: "1px 7px",
+    "font-size": "12px",
+    "font-weight": "700",
+    "margin-bottom": "8px",
+  });
+}
+
+function stripTags(value: string): string {
+  return value.replace(/<[^>]*>/g, "");
 }
 
 function paragraphStyle(preset: StylePreset, block: ArticleBlock): string {

@@ -10,6 +10,7 @@ import { Slice, Fragment } from "@tiptap/pm/model";
 import { BlockMeta } from "./BlockMetaExtension";
 import { EditorInsertTools, insertImageFilesIntoEditor } from "./EditorInsertTools";
 import { ImageGrid } from "./ImageGridExtension";
+import { KeywordMark } from "./KeywordMarkExtension";
 import { RichTextToolbar } from "./RichTextToolbar";
 import { htmlToCleanArticle } from "../domain/magicPaste";
 import { isSupportedImageFile } from "../domain/imageAssets";
@@ -52,6 +53,7 @@ export default function WriterEditor({
         TableCell,
         ImageNode.configure({ allowBase64: true }),
         ImageGrid,
+        KeywordMark,
         BlockMeta,
       ],
       content: astToTiptapDoc(article),

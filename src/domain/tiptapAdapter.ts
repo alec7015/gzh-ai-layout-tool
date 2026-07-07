@@ -279,6 +279,9 @@ function runMarksToTiptap(run: TextRun): TiptapNode["marks"] {
     if (mark === "bold") {
       return { type: "bold" };
     }
+    if (mark === "keyword") {
+      return { type: "keyword" };
+    }
     if (mark === "underline") {
       return { type: "underline" };
     }
@@ -367,7 +370,7 @@ function collectRuns(node: TiptapNode, runs: TextRun[]): void {
       .map((mark) => (mark === "strike" ? "strike" : mark))
       .filter(
         (mark): mark is TextMark =>
-          mark === "bold" || mark === "italic" || mark === "underline" || mark === "strike"
+          mark === "bold" || mark === "italic" || mark === "underline" || mark === "strike" || mark === "keyword"
       );
     const textStyle = node.marks?.find((mark) => mark.type === "textStyle")?.attrs ?? {};
     const attrs = {

@@ -165,4 +165,38 @@ describe("wechatRenderer", () => {
     expect(html).toContain("小结");
     expect(html).toContain("💡 提示");
   });
+
+  it("renders V13 component roles with deterministic original visuals", () => {
+    const html = renderWechatHtml(
+      {
+        meta: { title: "V13 角色" },
+        blocks: [
+          { id: "title-1", type: "title", text: "V13 角色", style: {} },
+          { id: "h-1", type: "heading", text: "准备工作", level: 1, style: {} },
+          { id: "h-2", type: "heading", text: "操作步骤", level: 1, style: {} },
+          { id: "toc-1", type: "paragraph", runs: [{ text: "目录" }], role: "toc", style: {} },
+          { id: "quote-1", type: "quote", text: "好工具会把复杂留给自己。", role: "pullquote", style: {} },
+          { id: "p-center", type: "paragraph", runs: [{ text: "保持克制，也保持锋利。" }], role: "quoteCenter", style: {} },
+          { id: "p-data", type: "paragraph", runs: [{ text: "效率提升 42%，复制错误减少 18%" }], role: "data", style: {} },
+          { id: "list-step", type: "list", ordered: true, items: ["粘贴内容", "选择角色"], role: "step", style: {} },
+          { id: "p-tool", type: "paragraph", runs: [{ text: "Tauri 桌面端复制更稳定" }], role: "toolLabel", style: {} },
+          { id: "p-side", type: "paragraph", runs: [{ text: "旁注用于补充名词解释" }], role: "sidenote", style: {} },
+          { id: "p-editor", type: "paragraph", runs: [{ text: "这一段适合先读" }], role: "editorNote", style: {} },
+          { id: "p-sign", type: "paragraph", runs: [{ text: "Alec｜个人效率工具实践者" }], role: "signature", style: {} },
+        ],
+      },
+      defaultStylePreset
+    );
+
+    expect(html).toContain("目录");
+    expect(html).toContain("准备工作");
+    expect(html).toContain("引言");
+    expect(html).toContain("42%");
+    expect(html).toContain("步骤 1");
+    expect(html).toContain("工具");
+    expect(html).toContain("旁注");
+    expect(html).toContain("编者按");
+    expect(html).toContain("作者");
+    expect(html).not.toContain("class=");
+  });
 });

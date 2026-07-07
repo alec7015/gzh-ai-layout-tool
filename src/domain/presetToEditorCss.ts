@@ -131,6 +131,43 @@ ${scope} [data-block-role="tip"] {
   border-radius: 8px;
   padding: 12px 14px;
 }
+${scope} [data-block-role="pullquote"],
+${scope} [data-block-role="data"],
+${scope} [data-block-role="editorNote"] {
+  background: ${preset.palette.secondary};
+  border-left: 4px solid ${preset.palette.primary};
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+${scope} [data-block-role="quoteCenter"] {
+  color: ${preset.palette.textSub};
+  text-align: center;
+  border-top: 1px solid ${preset.palette.primary};
+  border-bottom: 1px solid ${preset.palette.primary};
+  padding: 12px 10px;
+}
+${scope} [data-block-role="step"] {
+  background: ${preset.palette.secondary};
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+${scope} [data-block-role="toolLabel"],
+${scope} [data-block-role="sidenote"] {
+  background: ${preset.palette.secondary};
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+${scope} [data-block-role="toc"] {
+  background: ${preset.palette.secondary};
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+${scope} [data-block-role="signature"] {
+  color: ${preset.palette.textSub};
+  text-align: right;
+  border-top: 1px solid ${preset.palette.secondary};
+  padding-top: 12px;
+}
 ${scope} [data-block-role="imageSlot"] {
   outline: 1px dashed ${preset.palette.textSub};
   outline-offset: 8px;

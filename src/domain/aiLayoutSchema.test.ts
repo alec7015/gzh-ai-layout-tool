@@ -3,6 +3,7 @@ import {
   buildLayoutPlanRequest,
   buildLayoutRequest,
   coerceLayoutPlan,
+  coerceLayoutPlanV2,
   coerceLayoutRecommendation,
 } from "./aiLayoutSchema";
 import { createSampleArticle } from "./draftStore";
@@ -174,5 +175,58 @@ describe("aiLayoutSchema", () => {
       { blockId: article.blocks.find((block) => block.type === "paragraph")?.id, role: "lead" },
       { blockId: article.blocks.find((block) => block.type === "list")?.id, role: "steps" },
     ]);
+  });
+
+  it("coerces LayoutPlanV2 with recipe quotas, keyword limits, and hallucination guards", () => {
+    const article = {
+      meta: { title: "教程" },
+      blocks: [
+        { id: "title-1", type: "title" as const, text: "教程", style: {} },
+        { id: "p-1", type: "paragraph" as const, runs: [{ text: "打开工具后先粘贴文章内容" }], style: {} },
+        { id: "p-2", type: "paragraph" as const, runs: [{ text: "复制到公众号前检查预览" }], style: {} },
+        { id: "p-3", type: "paragraph" as const, runs: [{ text: "失败时保留原始链接" }], style: {} },
+        { id: "p-4", type: "paragraph" as const, runs: [{ text: "最后保存自己的版式" }], style: {} },
+      ],
+    };
+
+    const plan = coerceLayoutPlanV2(
+      {
+        version: 2,
+        articleType: "tutorial",
+        enableToc: true,
+        blocks: [
+          { index: 1, role: "tip", keywords: ["打开工具", "文章内容", "不存在", "多余"] },
+          { index: 2, role: "tip" },
+          { index: 3, role: "tip" },
+          { index: 4, role: "tip" },
+          { index: 99, role: "summary" },
+          { index: 2, role: "summary" },
+          { index: 3, role: "unknownRole" },
+          { index: 4, role: "pullquote" },
+        ],
+        pullQuotes: [
+          { sourceIndex: 1, text: "先粘贴文章" },
+          { sourceIndex: 2, text: "模型编造的金句" },
+        ],
+        overrides: {
+          "palette.primary": "#2B6CB0",
+          "__proto__.bad": "x",
+        },
+      },
+      article
+    );
+
+    expect(plan).toMatchObject({
+      version: 2,
+      articleType: "tutorial",
+      enableToc: true,
+      blocks: [
+        { index: 1, role: "tip", keywords: ["打开工具", "文章内容"] },
+        { index: 2, role: "tip" },
+        { index: 3, role: "tip" },
+      ],
+      pullQuotes: [{ sourceIndex: 1, text: "先粘贴文章" }],
+      overrides: { "palette.primary": "#2B6CB0" },
+    });
   });
 });

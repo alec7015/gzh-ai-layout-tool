@@ -13,6 +13,7 @@ import type { AiSettings } from "../domain/aiSettings";
 import { BlockMeta } from "./BlockMetaExtension";
 import { EditorInsertTools } from "./EditorInsertTools";
 import { ImageGrid } from "./ImageGridExtension";
+import { KeywordMark } from "./KeywordMarkExtension";
 import { RichTextToolbar } from "./RichTextToolbar";
 import { usePopoverDismiss } from "./editorShared";
 import { astToTiptapDoc, tiptapDocToAst, type TiptapDoc } from "../domain/tiptapAdapter";
@@ -76,6 +77,7 @@ export default function LayoutEditor({
         TableCell,
         ImageNode.configure({ allowBase64: true }),
         ImageGrid,
+        KeywordMark,
         BlockMeta,
       ],
       content: astToTiptapDoc(article),

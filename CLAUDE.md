@@ -47,7 +47,7 @@ Defined in `src/domain/types.ts`. An article is a flat array of 9 block types:
 |---|---|
 | `title` | `text` |
 | `heading` | `text`, `level?: 1 \| 2 \| 3` |
-| `paragraph` | `runs: TextRun[]` (supports bold/italic/underline/strike/emphasis marks + inline color/background/font attrs) |
+| `paragraph` | `runs: TextRun[]` (supports bold/italic/underline/strike/emphasis/keyword marks + inline color/background/font attrs) |
 | `quote` | `text` |
 | `list` | `ordered: boolean`, `items: string[]` |
 | `image` | `src` (data URL), `caption?` |
@@ -55,9 +55,9 @@ Defined in `src/domain/types.ts`. An article is a flat array of 9 block types:
 | `table` | `rows: TableRow[]` (each row has `cells: string[]`, optional `header: boolean`) |
 | `divider` | (no content) |
 
-Every block has an `id`, optional `style: BlockOverride` (per-block CSS overrides), and optional `role: BlockRole` (`"lead"` | `"keyQuote"` | `"emphasis"` | `"steps"` | `"summary"`). Block roles drive special rendering in `wechatRenderer.ts` (e.g., `lead` gets a left border and subdued color; `summary` gets a "小结" badge).
+Every block has an `id`, optional `style: BlockOverride` (per-block CSS overrides), and optional `role: BlockRole`. V13's primary component vocabulary is `summary`, `tip`, `pullquote`, `quoteCenter`, `data`, `step`, `toolLabel`, `sidenote`, `editorNote`, `toc`, and `signature`. Legacy roles `lead`, `keyQuote`, `emphasis`, `steps`, and `imageSlot` remain supported for old drafts and existing AI plans. Block roles drive special rendering in `wechatRenderer.ts` and editor preview styling in `presetToEditorCss.ts`.
 
-`TextRun` supports inline marks (`bold`, `italic`, `emphasis`, `underline`, `strike`) and inline `attrs` (`color`, `background`, `fontSize`, `fontFamily`).
+`TextRun` supports inline marks (`bold`, `italic`, `emphasis`, `underline`, `strike`, `keyword`) and inline `attrs` (`color`, `background`, `fontSize`, `fontFamily`). `keyword` renders as a primary-color underline marker and is preserved by the custom Tiptap `KeywordMark` extension.
 
 ### Data flow
 
@@ -94,6 +94,7 @@ Title import is defensive: long or pasted title content is normalized to a max 1
 The current branch (`codex/v5-layout-plan`) adds AI-powered multi-plan layout generation:
 
 - **`aiLayoutSchema.ts`** builds chat completion requests for generating 2-3 `LayoutPlan`s. Each plan specifies a `styleId`, optional `palette.primary`, optional per-component variants, and optional block-role assignments. The `coerceLayoutPlan()` function validates AI responses against the variant vocabulary, blocks that exist in the article, role quotas (e.g., max 1 lead, 2 keyQuotes), and role/block-type compatibility.
+- **`recipes.ts`** defines V13 article-type recipes (`tutorial`, `review`, `opinion`, `news`, `listicle`, `generic`) with allowed roles, quotas, keyword density, and defaults. `coerceLayoutPlanV2()` validates model output against these recipes, drops hallucinated pull quotes, trims invalid keywords, and keeps unsafe overrides out.
 - **`layoutPlan.ts`** converts a `LayoutPlan` into `StyleOverrides` (via `paletteDerive.ts` which generates a full palette from a single primary color) and applies block roles to the article.
 - **`paletteDerive.ts`** takes a single `primary` hex color and derives `secondary`, `accent`, and `textSub` colors using HSL math from `colorMath.ts`, with contrast-ratio enforcement.
 
@@ -162,6 +163,8 @@ Key domain modules and their roles:
 All CSS lives in `src/styles.css` (no CSS modules, no CSS-in-JS). The rendered WeChat HTML uses inline styles exclusively. Icons come from `lucide-react`.
 
 WKWebView compatibility is a first-class constraint. Vite builds target `es2019` + `safari14`; rendered WeChat HTML tests scan for unsafe SVG data URI patterns and newer color syntax such as `color-mix()`/`oklch()`. Prefer simple inline CSS that works in Safari/WebKit and WeChat WebView.
+
+V13 compliance scanning lives in `src/domain/wechatCompliance.ts`. It checks platform constraints (no classes/ids, no style/script tags, no grid/flex/float/fixed positioning) plus WebKit constraints. The current scanner allows existing `h1/h2/h3` output for backward compatibility; `docs/v13-phase0-audit.md` records that strict `<section>` and `<span leaf="">` requirements still need manual WeChat backend A/B testing before becoming hard scanner rules.
 
 The project's original design document is `gzh_tool_design_v3.md` (~80 pages) — it covers product goals, feature decisions, AST+Style architecture, preset designs, and AI layout workflow.
 

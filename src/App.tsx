@@ -10,6 +10,7 @@ import {
   Tablet,
 } from "lucide-react";
 import { EditorBoundary } from "./components/EditorBoundary";
+import { ConfirmDialog, type ConfirmDialogState } from "./components/ConfirmDialog";
 import { SettingsModal } from "./components/SettingsModal";
 import { StyleExtractDialog } from "./components/StyleExtractDialog";
 import { useColumnResize } from "./hooks/useColumnResize";
@@ -53,6 +54,7 @@ import {
   updateCurrentDraftLayoutArticle,
 } from "./domain/draftLibrary";
 import { copyWechatHtml } from "./domain/clipboard";
+import { renderDarkPreviewHtml } from "./domain/darkPreviewTransform";
 import { createFeedback, type Feedback } from "./domain/feedback";
 import { mergeStylePreset } from "./domain/styleEngine";
 import { defaultStylePreset, stylePresets } from "./domain/stylePresets";
@@ -102,6 +104,8 @@ export default function App() {
   const [aiSettings, setAiSettings] = useState<AiSettings>(() => loadAiSettings(storage));
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [styleExtractOpen, setStyleExtractOpen] = useState(false);
+  const [dialogState, setDialogState] = useState<ConfirmDialogState | null>(null);
+  const dialogResolverRef = useRef<((value: string | boolean | null) => void) | null>(null);
   const [settingsTesting, setSettingsTesting] = useState(false);
   const [settingsTestMessage, setSettingsTestMessage] = useState("可先测试连接，再开始写作。");
   const [customStyles, setCustomStyles] = useState(() => loadCustomStyles(storage));
@@ -146,6 +150,10 @@ export default function App() {
   const layoutPreviewHtml = useMemo(
     () => (layoutArticle ? renderWechatHtml(layoutArticle, mergedPreset, { includePlaceholders: true }) : ""),
     [layoutArticle, mergedPreset]
+  );
+  const activePreviewHtml = useMemo(
+    () => (darkPreview ? renderDarkPreviewHtml(layoutPreviewHtml) : layoutPreviewHtml),
+    [darkPreview, layoutPreviewHtml]
   );
   const thumbArticle = useMemo(
     () => (layoutArticle ? { ...layoutArticle, blocks: layoutArticle.blocks.slice(0, 10) } : null),
@@ -275,8 +283,8 @@ export default function App() {
     setFeedback(createFeedback("success", "已清空所有版本历史。"));
   }
 
-  function deleteAllDrafts() {
-    if (!window.confirm("确认删除全部草稿？此操作不可撤销。")) {
+  async function deleteAllDrafts() {
+    if (!(await requestConfirm("确认删除全部草稿？此操作不可撤销。"))) {
       return;
     }
     const library = resetDrafts(createSampleArticle());
@@ -285,8 +293,9 @@ export default function App() {
     setFeedback(createFeedback("success", "已删除全部草稿，并创建空白示例草稿。"));
   }
 
-  function resetLocalData() {
-    if (window.prompt("输入“重置”以确认清空草稿、版本、模型设置和本地版式。") !== "重置") {
+  async function resetLocalData() {
+    const value = await requestPrompt("输入“重置”以确认清空草稿、版本、模型设置和本地版式。", "重置");
+    if (value !== "重置") {
       return;
     }
     storage?.clear();
@@ -301,11 +310,11 @@ export default function App() {
     setFeedback(createFeedback("success", "已重置全部本地数据。"));
   }
 
-  function copyToLayout() {
+  async function copyToLayout() {
     if (
       layoutArticle &&
       JSON.stringify(layoutArticle) !== JSON.stringify(article) &&
-      !window.confirm("排版台已有内容，确认用写作台当前稿覆盖？")
+      !(await requestConfirm("排版台已有内容，确认用写作台当前稿覆盖？"))
     ) {
       return;
     }
@@ -403,7 +412,7 @@ export default function App() {
     }
     if (
       hasVisualFormatting(article) &&
-      !window.confirm("当前稿含有手工样式，AI 智能排版可能覆盖这些样式。继续前会保存版本快照，确认继续？")
+      !(await requestConfirm("当前稿含有手工样式，AI 智能排版可能覆盖这些样式。继续前会保存版本快照，确认继续？"))
     ) {
       return;
     }
@@ -1040,7 +1049,8 @@ export default function App() {
             <div className={`device-frame ${previewDevice}${darkPreview ? " dark" : ""}`}>
               {layoutArticle ? (
                 <div className="device-screen">
-                  <div dangerouslySetInnerHTML={{ __html: layoutPreviewHtml }} />
+                  <div dangerouslySetInnerHTML={{ __html: activePreviewHtml }} />
+                  {darkPreview ? <p className="dark-preview-note">暗色为近似模拟，最终以微信客户端映射为准。</p> : null}
                 </div>
               ) : (
                 <div className="device-screen">
@@ -1059,8 +1069,51 @@ export default function App() {
         onSave={(preset) => applyExtractedStyle(preset, "save")}
         onClose={() => setStyleExtractOpen(false)}
       />
+      {dialogState ? (
+        <ConfirmDialog
+          state={dialogState}
+          onChangeValue={(value) => setDialogState((current) => (current ? { ...current, value } : current))}
+          onCancel={() => resolveDialog(null)}
+          onConfirm={() => resolveDialog(dialogState.kind === "prompt" ? dialogState.value ?? "" : true)}
+        />
+      ) : null}
     </div>
   );
+
+  function requestConfirm(message: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      dialogResolverRef.current = (value) => resolve(value === true);
+      setDialogState({
+        kind: "confirm",
+        title: "确认操作",
+        message,
+        confirmText: "确认",
+        cancelText: "取消",
+      });
+    });
+  }
+
+  function requestPrompt(message: string, requiredText: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      dialogResolverRef.current = (value) => resolve(typeof value === "string" ? value : null);
+      setDialogState({
+        kind: "prompt",
+        title: "确认操作",
+        message,
+        requiredText,
+        value: "",
+        confirmText: "确认重置",
+        cancelText: "取消",
+      });
+    });
+  }
+
+  function resolveDialog(value: string | boolean | null) {
+    const resolver = dialogResolverRef.current;
+    dialogResolverRef.current = null;
+    setDialogState(null);
+    resolver?.(value);
+  }
 }
 
 function hasVisualFormatting(article: ArticleAst): boolean {

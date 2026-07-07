@@ -43,7 +43,8 @@ export function tiptapDocToAst(doc: TiptapDoc, previous?: ArticleAst): ArticleAs
     }
     return nodeToBlock(node, index);
   }).filter(Boolean) as ArticleBlock[];
-  const firstTitle = blocks.find((block): block is Extract<ArticleBlock, { type: "title" }> => block.type === "title");
+  const orderedBlocks = ensureTitleFirst(blocks, previous);
+  const firstTitle = orderedBlocks.find((block): block is Extract<ArticleBlock, { type: "title" }> => block.type === "title");
   const title = firstTitle?.text || previous?.meta.title || "未命名草稿";
 
   return {
@@ -51,7 +52,7 @@ export function tiptapDocToAst(doc: TiptapDoc, previous?: ArticleAst): ArticleAs
       ...(previous?.meta ?? {}),
       title,
     },
-    blocks: blocks.length > 0 ? blocks : [{ id: "title-1", type: "title", text: title, style: {} }],
+    blocks: orderedBlocks.length > 0 ? orderedBlocks : [{ id: "title-1", type: "title", text: title, style: {} }],
   };
 }
 
@@ -471,4 +472,25 @@ function isBlockOverride(value: unknown): value is BlockOverride {
 
 function isGridLayout(value: unknown): value is GridLayout {
   return value === "two" || value === "three" || value === "quad";
+}
+
+function ensureTitleFirst(blocks: ArticleBlock[], previous?: ArticleAst): ArticleBlock[] {
+  const titleIndex = blocks.findIndex((block) => block.type === "title");
+  if (titleIndex === 0) {
+    return blocks;
+  }
+  if (titleIndex > 0) {
+    const title = blocks[titleIndex];
+    return [title, ...blocks.slice(0, titleIndex), ...blocks.slice(titleIndex + 1)];
+  }
+
+  return [
+    {
+      id: "title-1",
+      type: "title",
+      text: previous?.meta.title || "未命名草稿",
+      style: {},
+    },
+    ...blocks,
+  ];
 }

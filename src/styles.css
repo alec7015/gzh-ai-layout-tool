@@ -881,11 +881,16 @@ body.is-col-resizing {
 }
 
 .device-frame.dark .device-screen {
-  background: #111820;
+  color: #e5e7eb;
+  background: #0f141b;
 }
 
-.device-frame.dark .device-screen > section {
-  filter: invert(0.92) hue-rotate(180deg);
+.dark-preview-note {
+  margin: 14px 0 0;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .secondary-action {
@@ -1080,11 +1085,14 @@ body.is-col-resizing {
 }
 
 .tiptap-drop-zone {
+  min-width: 0;
+  min-height: 0;
   width: 100%;
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .editor-toolbar {
@@ -1197,12 +1205,41 @@ body.is-col-resizing {
 }
 
 .writing-area .tiptap {
+  min-width: 0;
   min-height: 100%;
   padding: 42px 56px;
   outline: 0;
   color: #1f2933;
   font-size: 17px;
   line-height: 2;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.writing-area .tiptap h1,
+.writing-area .tiptap h2,
+.writing-area .tiptap h3,
+.writing-area .tiptap h4,
+.writing-area .tiptap p,
+.writing-area .tiptap blockquote,
+.writing-area .tiptap ul,
+.writing-area .tiptap ol,
+.writing-area .tiptap table {
+  max-width: 100%;
+}
+
+.writing-area .tiptap table,
+.layout-editor .tiptap table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.writing-area .tiptap th,
+.writing-area .tiptap td,
+.layout-editor .tiptap th,
+.layout-editor .tiptap td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .writing-area .tiptap h1,
@@ -1253,6 +1290,48 @@ body.is-col-resizing {
   border: 1px dashed #cfd7df;
   border-radius: 8px;
   background: #fafbfc;
+}
+
+.confirm-dialog {
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+}
+
+.confirm-dialog header {
+  color: #1f2933;
+  font-size: 18px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.confirm-dialog label {
+  display: grid;
+  gap: 8px;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.confirm-dialog input {
+  min-height: 38px;
+  border: 1px solid #d8dee5;
+  border-radius: 7px;
+  padding: 0 10px;
+  color: #1f2933;
+}
+
+.confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .ig-block[data-selected="true"] {

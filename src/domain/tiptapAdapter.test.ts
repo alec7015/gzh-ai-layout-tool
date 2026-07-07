@@ -234,4 +234,20 @@ describe("tiptapAdapter", () => {
     expect(restored.blocks[2]).toMatchObject({ role: "keyQuote" });
     expect(restored.blocks[3]).toMatchObject({ role: "imageSlot", roleHint: "清晨桌面图" });
   });
+
+  it("keeps a title block first when pasted content appears before the original title", () => {
+    const restored = tiptapDocToAst(
+      {
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "粘贴到标题前的正文" }] },
+          { type: "heading", attrs: { level: 1, blockId: "title-1", blockType: "title" }, content: [{ type: "text", text: "原标题" }] },
+        ],
+      },
+      { meta: { title: "原标题" }, blocks: [] }
+    );
+
+    expect(restored.blocks[0]).toMatchObject({ type: "title", text: "原标题" });
+    expect(restored.blocks[1]).toMatchObject({ type: "paragraph" });
+  });
 });

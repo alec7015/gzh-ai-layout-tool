@@ -49,6 +49,10 @@ export function StyleExtractDialog({
   }
 
   async function extractFromHtml(html: string, source: string) {
+    if (!html.trim()) {
+      setStatus({ tone: "error", message: "请先粘贴文章 HTML 或富文本内容。" });
+      return;
+    }
     setBusy(true);
     setStatus({ tone: "info", message: "正在分析版式参数…" });
     try {
@@ -65,8 +69,14 @@ export function StyleExtractDialog({
       }
       setPreset(nextPreset);
       setStatus({ tone: "success", message: `已从${source}提取版式参数。` });
-    } catch {
-      setStatus({ tone: "error", message: "版式提取失败，请换一篇文章或改用富文本粘贴。" });
+    } catch (error) {
+      setStatus({
+        tone: "error",
+        message:
+          error instanceof Error && error.message
+            ? `版式提取失败：${error.message}`
+            : "版式提取失败，请换一篇文章或改用富文本粘贴。",
+      });
     } finally {
       setBusy(false);
     }
@@ -121,10 +131,10 @@ export function StyleExtractDialog({
               富文本粘贴捕获框
               <textarea
                 rows={8}
-                value={pastedHtml ? "已捕获富文本 HTML，可重新粘贴覆盖。" : ""}
-                placeholder="在这里 Ctrl+V 粘贴公众号正文区域"
+                value={pastedHtml}
+                placeholder="在这里 Ctrl+V 粘贴公众号正文区域，或直接粘贴文章 HTML 源码"
                 onPaste={handlePaste}
-                onChange={() => undefined}
+                onChange={(event) => setPastedHtml(event.target.value)}
               />
             </label>
             <button

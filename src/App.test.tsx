@@ -62,6 +62,17 @@ describe("App", () => {
     expect(container.querySelector(".model-settings-section")).toBeNull();
   });
 
+  it("uses an in-app confirm dialog for destructive local data actions", async () => {
+    render(<App />);
+
+    await userEvent.click(screen.getByRole("button", { name: "模型设置" }));
+    await userEvent.click(screen.getByRole("button", { name: "删除全部草稿" }));
+
+    expect(screen.getByRole("dialog", { name: "确认操作" })).toHaveTextContent("确认删除全部草稿");
+    await userEvent.click(screen.getByRole("button", { name: "取消" }));
+    expect(screen.queryByRole("dialog", { name: "确认操作" })).not.toBeInTheDocument();
+  });
+
   it("shows writer copy-to-layout and context-aware smart format controls", async () => {
     render(<App />);
 

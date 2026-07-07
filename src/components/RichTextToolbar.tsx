@@ -38,7 +38,8 @@ import {
   type AlignValue,
   type PainterSnapshot,
 } from "./editorShared";
-import type { BlockRole } from "../domain/types";
+import { isRoleCompatible } from "../domain/roleMatrix";
+import type { BlockRole, BlockType } from "../domain/types";
 
 interface RichTextToolbarProps {
   editor: Editor | null;
@@ -52,6 +53,23 @@ interface RichTextToolbarProps {
   slotLeft?: ReactNode;
   slotRight?: ReactNode;
 }
+
+const roleOptions: Array<{ value: BlockRole; label: string }> = [
+  { value: "keyQuote", label: "金句卡" },
+  { value: "pullquote", label: "引言卡" },
+  { value: "quoteCenter", label: "居中金句" },
+  { value: "data", label: "数据卡" },
+  { value: "step", label: "步骤标签" },
+  { value: "toolLabel", label: "工具标签" },
+  { value: "sidenote", label: "名词旁注" },
+  { value: "editorNote", label: "编者按" },
+  { value: "toc", label: "目录卡" },
+  { value: "signature", label: "签名卡" },
+  { value: "emphasis", label: "重点段" },
+  { value: "summary", label: "小结卡" },
+  { value: "tip", label: "提示卡" },
+  { value: "imageSlot", label: "建议配图" },
+];
 
 export function RichTextToolbar({
   editor,
@@ -77,7 +95,9 @@ export function RichTextToolbar({
   const displayedFontSizeSelect = customFontSizeOpen ? "custom" : fontSizeSelect;
   const displayedLineHeightSelect = customLineHeightOpen ? "custom" : lineHeightSelect;
   const currentBlock = useMemo(() => blockSelectValue(editor), [editor, editor?.state.selection]);
+  const currentCarrier = blockCarrierType(currentBlock);
   const currentRole = useMemo(() => blockRoleValue(editor), [editor, editor?.state.selection]);
+  const hasCompatibleRoles = roleOptions.some((option) => isRoleCompatible(option.value, currentCarrier));
   const currentAlign = getActiveAlign(editor);
   const currentIndent = getBlockStyleValue(editor, "text-indent") === "2em";
 
@@ -352,6 +372,8 @@ export function RichTextToolbar({
       {features?.blockRoles ? (
         <select
           aria-label="块角色"
+          disabled={!hasCompatibleRoles}
+          title={hasCompatibleRoles ? undefined : "当前块类型不支持角色组件"}
           value={currentRole}
           onChange={(event) => {
             const role = event.target.value as "" | BlockRole;
@@ -359,20 +381,15 @@ export function RichTextToolbar({
           }}
         >
           <option value="">角色</option>
-          <option value="keyQuote">金句卡</option>
-          <option value="pullquote">引言卡</option>
-          <option value="quoteCenter">居中金句</option>
-          <option value="data">数据卡</option>
-          <option value="step">步骤标签</option>
-          <option value="toolLabel">工具标签</option>
-          <option value="sidenote">名词旁注</option>
-          <option value="editorNote">编者按</option>
-          <option value="toc">目录卡</option>
-          <option value="signature">签名卡</option>
-          <option value="emphasis">重点段</option>
-          <option value="summary">小结卡</option>
-          <option value="tip">提示卡</option>
-          <option value="imageSlot">建议配图</option>
+          {roleOptions.map((option) => (
+            <option
+              disabled={!isRoleCompatible(option.value, currentCarrier)}
+              key={option.value}
+              value={option.value}
+            >
+              {option.label}
+            </option>
+          ))}
         </select>
       ) : null}
       <button
@@ -492,6 +509,22 @@ function getActiveAlign(editor: Editor | null): AlignValue {
 function blockRoleValue(editor: Editor | null) {
   const role = findTopBlock(editor)?.node.attrs.blockRole;
   return typeof role === "string" ? role : "";
+}
+
+function blockCarrierType(value: string): BlockType {
+  if (value === "quote") {
+    return "quote";
+  }
+  if (value === "bullet" || value === "ordered") {
+    return "list";
+  }
+  if (value === "title") {
+    return "title";
+  }
+  if (value.startsWith("heading")) {
+    return "heading";
+  }
+  return "paragraph";
 }
 
 function alignTitle(align: AlignValue) {

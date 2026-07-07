@@ -1,9 +1,18 @@
 import type { AiSettings } from "./aiSettings";
 import type { ChatCompletionRequest } from "./aiWriting";
+import { extractBalancedJson, extractJsonPayload, precleanModelText } from "./jsonRecovery";
 
 type FetchLike = typeof fetch;
 
-export type AiErrorCode = "missing-key" | "cors" | "network" | "http" | "parse" | "aborted";
+export type AiErrorCode =
+  | "missing-key"
+  | "cors"
+  | "network"
+  | "http"
+  | "parse"
+  | "parse-truncated"
+  | "parse-nonjson"
+  | "aborted";
 
 export type AiResult<T> =
   | { ok: true; data: T; rawText?: string }
@@ -50,7 +59,8 @@ export async function callChatCompletionsJson<T>(
   settings: AiSettings,
   request: ChatCompletionRequest,
   fetcher?: FetchLike,
-  options?: AiCallOptions
+  options?: AiCallOptions,
+  retriedCorrection = false
 ): Promise<AiResult<T>> {
   const textResult = await callChatCompletionsText(settings, request, fetcher, options);
   if (!textResult.ok) {
@@ -59,10 +69,24 @@ export async function callChatCompletionsJson<T>(
 
   const data = safeJsonParse<T>(textResult.data);
   if (!data) {
+    const code = classifyParseFailure(textResult.data);
+    if (!retriedCorrection && code === "parse-truncated" && request.response_format) {
+      return callChatCompletionsJson<T>(
+        settings,
+        buildJsonCorrectionRequest(request, textResult.data),
+        fetcher,
+        options,
+        true
+      );
+    }
     return {
       ok: false,
-      code: "parse",
-      message: "模型返回内容不是可解析的 JSON。",
+      code,
+      message: code === "parse-truncated"
+        ? "模型返回的 JSON 不完整，可能因为输出被截断。"
+        : code === "parse-nonjson"
+          ? "模型没有返回 JSON 内容。"
+          : "模型返回内容不是可解析的 JSON。",
       rawText: textResult.data,
     };
   }
@@ -124,18 +148,39 @@ export async function callChatCompletionsText(
 }
 
 export function safeJsonParse<T>(input: string): T | null {
-  const normalized = input
-    .trim()
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
-    .trim();
+  const normalized = extractJsonPayload(input);
+  if (!normalized) {
+    return null;
+  }
 
   try {
     return JSON.parse(normalized) as T;
   } catch {
     return null;
   }
+}
+
+function classifyParseFailure(input: string): Extract<AiErrorCode, "parse" | "parse-truncated" | "parse-nonjson"> {
+  const cleaned = precleanModelText(input);
+  if (/^\s*[{[]/.test(cleaned) && !extractBalancedJson(cleaned)) {
+    return "parse-truncated";
+  }
+  return /[{[]/.test(cleaned) ? "parse" : "parse-nonjson";
+}
+
+function buildJsonCorrectionRequest(request: ChatCompletionRequest, rawText: string): ChatCompletionRequest {
+  return {
+    ...request,
+    stream: false,
+    messages: [
+      ...request.messages,
+      { role: "assistant", content: rawText.slice(0, 4000) },
+      {
+        role: "user",
+        content: "上一次输出不是完整 JSON。请修正为完整 JSON，只输出 JSON，不要解释，不要 Markdown 围栏。",
+      },
+    ],
+  };
 }
 
 function buildRequestBody(settings: AiSettings, request: ChatCompletionRequest): Record<string, unknown> {

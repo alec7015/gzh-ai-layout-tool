@@ -177,6 +177,23 @@ describe("aiLayoutSchema", () => {
     ]);
   });
 
+  it("salvages common layout plan wrapper shapes", () => {
+    const article = createSampleArticle();
+    const plan = coerceLayoutPlan(
+      {
+        plan: {
+          styleId: "listicle_cards",
+          reason: "单对象包裹",
+          blocks: [{ blockId: article.blocks.find((block) => block.type === "paragraph")?.id, role: "summary" }],
+        },
+      },
+      article
+    );
+
+    expect(plan?.[0]).toMatchObject({ styleId: "listicle_cards", reason: "单对象包裹" });
+    expect(plan?.[0].blocks?.[0]).toMatchObject({ role: "summary" });
+  });
+
   it("coerces LayoutPlanV2 with recipe quotas, keyword limits, and hallucination guards", () => {
     const article = {
       meta: { title: "教程" },
@@ -227,6 +244,24 @@ describe("aiLayoutSchema", () => {
       ],
       pullQuotes: [{ sourceIndex: 1, text: "先粘贴文章" }],
       overrides: { "palette.primary": "#2B6CB0" },
+    });
+  });
+
+  it("salvages common LayoutPlanV2 alias fields", () => {
+    const article = createSampleArticle();
+    const plan = coerceLayoutPlanV2(
+      {
+        version: 2,
+        article_type: "tutorial",
+        blockRoles: [{ blockIndex: 2, role: "tip" }],
+      },
+      article
+    );
+
+    expect(plan).toMatchObject({
+      version: 2,
+      articleType: "tutorial",
+      blocks: [{ index: 2, role: "tip" }],
     });
   });
 });

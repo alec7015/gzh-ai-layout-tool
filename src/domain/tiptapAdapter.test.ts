@@ -74,6 +74,26 @@ describe("tiptapAdapter", () => {
     expect(JSON.stringify(doc)).not.toContain('"text":""');
   });
 
+  it("round trips code blocks through Tiptap JSON", () => {
+    const article: ArticleAst = {
+      meta: { title: "代码块" },
+      blocks: [
+        { id: "title-1", type: "title", text: "代码块", style: {} },
+        { id: "code-1", type: "code", language: "ts", text: "const x = 1;\n  console.log(x);", style: {} },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1]).toMatchObject({
+      type: "codeBlock",
+      attrs: { blockId: "code-1", language: "ts" },
+    });
+    expect(tiptapDocToPlainText(doc)).toContain("```ts");
+    expect(restored.blocks[1]).toMatchObject(article.blocks[1]);
+  });
+
   it("round trips single image blocks as image nodes", () => {
     const article: ArticleAst = {
       meta: { title: "单图" },
@@ -102,6 +122,22 @@ describe("tiptapAdapter", () => {
       },
     });
     expect(restored.blocks[1]).toMatchObject(article.blocks[1]);
+  });
+
+  it("uses empty alt text for images without explicit captions", () => {
+    const article: ArticleAst = {
+      meta: { title: "空图注" },
+      blocks: [
+        { id: "title-1", type: "title", text: "空图注", style: {} },
+        { id: "image-1", type: "image", src: "data:image/png;base64,abc", caption: "", style: {} },
+      ],
+    };
+
+    const doc = astToTiptapDoc(article);
+    const restored = tiptapDocToAst(doc, article);
+
+    expect(doc.content[1].attrs).toMatchObject({ alt: "" });
+    expect(restored.blocks[1]).toMatchObject({ type: "image", caption: "" });
   });
 
   it("keeps old markdown image paragraphs readable", () => {

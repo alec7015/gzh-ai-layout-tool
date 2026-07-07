@@ -3,6 +3,7 @@ import { defaultStylePreset } from "./stylePresets";
 import { stylePresets } from "./stylePresets";
 import { mergeStylePreset } from "./styleEngine";
 import { renderWechatHtml } from "./wechatRenderer";
+import { scanWechatHtmlCompliance } from "./wechatCompliance";
 import type { ArticleAst } from "./types";
 
 const article: ArticleAst = {
@@ -198,5 +199,42 @@ describe("wechatRenderer", () => {
     expect(html).toContain("编者按");
     expect(html).toContain("作者");
     expect(html).not.toContain("class=");
+  });
+
+  it("renders drop cap without float and skips rich-text-leading paragraphs", () => {
+    const dropArticle: ArticleAst = {
+      meta: { title: "首字下沉" },
+      blocks: [
+        { id: "title-1", type: "title", text: "首字下沉", style: {} },
+        { id: "p-1", type: "paragraph", runs: [{ text: "第一段正文应该有首字样式" }], style: {} },
+        { id: "p-2", type: "paragraph", runs: [{ text: "加粗开头", marks: ["bold"] }, { text: "不应拆标签" }], style: {} },
+      ],
+    };
+
+    const html = renderWechatHtml(dropArticle, stylePresets[0]);
+
+    expect(html).not.toContain("float:");
+    expect(html).toContain("font-size:38px");
+    expect(html).not.toContain("><</span>");
+    expect(scanWechatHtmlCompliance(html).violations).toEqual([]);
+  });
+
+  it("renders code blocks as WeChat-safe section lines", () => {
+    const html = renderWechatHtml(
+      {
+        meta: { title: "代码" },
+        blocks: [
+          { id: "title-1", type: "title", text: "代码", style: {} },
+          { id: "code-1", type: "code", language: "js", text: "function hi() {\n  return \"ok\";\n}", style: {} },
+        ],
+      },
+      defaultStylePreset
+    );
+
+    expect(html).toContain("function hi()");
+    expect(html).toContain("　　return");
+    expect(html).not.toContain("<pre");
+    expect(html).not.toContain("white-space");
+    expect(scanWechatHtmlCompliance(html).violations).toEqual([]);
   });
 });

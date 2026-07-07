@@ -11,6 +11,8 @@ const allowedAttrs = new Set([
   "y",
   "width",
   "height",
+  "rx",
+  "ry",
   "x1",
   "y1",
   "x2",
@@ -20,6 +22,9 @@ const allowedAttrs = new Set([
   "stroke",
   "stroke-width",
   "stroke-linecap",
+  "stroke-dasharray",
+  "stroke-linejoin",
+  "fill-opacity",
   "opacity",
   "transform",
   "viewBox",
@@ -57,12 +62,25 @@ export function buildOrnamentRequest(
   };
 }
 
+export function extractSvgMarkup(raw: string): string {
+  const text = raw.trim();
+  const fenced = text.match(/```(?:svg|xml)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const source = fenced || text;
+  const start = source.search(/<svg[\s>]/i);
+  const end = source.search(/<\/svg>/i);
+  if (start < 0 || end < start) {
+    return source;
+  }
+  return source.slice(start, end + "</svg>".length).trim();
+}
+
 export function sanitizeSvg(raw: string): SvgSanitizeResult {
-  if (/on[a-z]+\s*=|href\s*=|xlink:href\s*=/i.test(raw)) {
+  const markup = extractSvgMarkup(raw);
+  if (/on[a-z]+\s*=|href\s*=|xlink:href\s*=/i.test(markup)) {
     return { ok: false, reason: "SVG 含事件或外部引用，已拒绝。" };
   }
 
-  const doc = new DOMParser().parseFromString(raw.trim(), "image/svg+xml");
+  const doc = new DOMParser().parseFromString(markup, "image/svg+xml");
   const root = doc.documentElement;
   if (!root || root.tagName !== "svg" || root.querySelector("parsererror")) {
     return { ok: false, reason: "模型返回内容不是合法 SVG。" };

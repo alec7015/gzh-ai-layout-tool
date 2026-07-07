@@ -95,6 +95,23 @@ export function markdownToAst(input: string, options: MarkdownParseOptions = {})
       continue;
     }
 
+    const codeFence = line.match(/^```([a-zA-Z0-9_-]*)\s*$/);
+    if (codeFence) {
+      flushList(blocks, listItems, orderedList);
+      listItems = [];
+      orderedList = false;
+      const parsed = readCodeFence(input.split(/\r?\n/), index, codeFence[1]);
+      blocks.push({
+        id: createBlockId("code", index),
+        type: "code",
+        text: parsed.text,
+        ...(parsed.language ? { language: parsed.language } : {}),
+        style: {},
+      });
+      index = parsed.nextIndex;
+      continue;
+    }
+
     const unordered = line.match(/^[-*]\s+(.+)$/);
     const ordered = line.match(/^\d+[.)]\s+(.+)$/);
     if (unordered || ordered) {
@@ -133,7 +150,7 @@ export function markdownToAst(input: string, options: MarkdownParseOptions = {})
         id: createBlockId("image", index),
         type: "image",
         src: imageMatch[2],
-        caption: imageMatch[1] || "配图",
+        caption: imageMatch[1] ?? "",
         style: {},
       });
       continue;
@@ -185,11 +202,13 @@ export function astToPlainText(article: ArticleAst): string {
         case "list":
           return block.items.map((item) => `- ${item}`).join("\n");
         case "image":
-          return `![${block.caption ?? "配图"}](${block.src})`;
+          return `![${block.caption ?? ""}](${block.src})`;
         case "imageGrid":
-          return block.images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+          return block.images.map((image) => `![${image.alt ?? ""}](${image.src})`).join("\n");
         case "table":
           return tableToMarkdown(block.rows);
+        case "code":
+          return `\`\`\`${block.language ?? ""}\n${block.text}\n\`\`\``;
         case "divider":
           return "---";
       }
@@ -214,11 +233,13 @@ export function astToMarkdown(article: ArticleAst): string {
             .map((item, index) => `${block.ordered ? `${index + 1}.` : "-"} ${item}`)
             .join("\n");
         case "image":
-          return `![${block.caption ?? "配图"}](${block.src})`;
+          return `![${block.caption ?? ""}](${block.src})`;
         case "imageGrid":
-          return block.images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+          return block.images.map((image) => `![${image.alt ?? ""}](${image.src})`).join("\n");
         case "table":
           return tableToMarkdown(block.rows);
+        case "code":
+          return `\`\`\`${block.language ?? ""}\n${block.text}\n\`\`\``;
         case "divider":
           return blockIndex === 0 ? "---" : "\n---";
       }
@@ -368,6 +389,19 @@ function readTable(lines: string[], startIndex: number): { rows: TableRow[]; nex
   }
 
   return { rows, nextIndex: index };
+}
+
+function readCodeFence(rawLines: string[], startIndex: number, language = ""): { text: string; language: string; nextIndex: number } {
+  const lines: string[] = [];
+  let index = startIndex + 1;
+  while (index < rawLines.length) {
+    if (/^```\s*$/.test(rawLines[index].trim())) {
+      return { text: lines.join("\n"), language, nextIndex: index };
+    }
+    lines.push(rawLines[index]);
+    index += 1;
+  }
+  return { text: lines.join("\n"), language, nextIndex: rawLines.length - 1 };
 }
 
 function isTableRow(line: string): boolean {

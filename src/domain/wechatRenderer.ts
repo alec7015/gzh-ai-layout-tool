@@ -88,6 +88,8 @@ function renderBlock(
       return renderImageGridWechat(block);
     case "table":
       return renderTable(block.rows, preset, block);
+    case "code":
+      return renderCode(block.text, block.language, preset, block);
     case "divider":
       return renderDivider(preset, block);
   }
@@ -340,14 +342,15 @@ function renderParagraph(
     })}">${content}</p>`;
   }
 
-  if (drop && content.length > 0) {
+  if (drop && content.length > 0 && !content.startsWith("<")) {
     const first = content.slice(0, 1);
     const rest = content.slice(1);
     return `<p style="${paragraphStyle(preset, block)}"><span style="${style({
-      float: "left",
+      display: "inline-block",
       "font-size": "38px",
-      "line-height": "34px",
+      "line-height": "1",
       "padding-right": "6px",
+      "vertical-align": "baseline",
       color: preset.palette.primary,
       "font-weight": "700",
     })}">${first}</span>${rest}</p>`;
@@ -742,6 +745,37 @@ function renderTable(rows: TableRow[], preset: StylePreset, block: ArticleBlock)
     "font-size": preset.typography.bodySize,
     ...toInlineOverride(block.style),
   })}">${body}</table>`;
+}
+
+function renderCode(text: string, language: string | undefined, preset: StylePreset, block: ArticleBlock): string {
+  const languageLabel = language?.trim();
+  const lines = text.split(/\r?\n/);
+  const body = lines
+    .map((line) => {
+      const normalized = line.replace(/^\s+/, (indent) => "　".repeat(indent.length));
+      return `<p style="${style({
+        margin: "0",
+        color: preset.palette.textMain,
+        "font-size": "13px",
+        "line-height": "1.8",
+        "font-family": "Menlo,Consolas,'Courier New',monospace",
+      })}">${escapeHtml(normalized || "　")}</p>`;
+    })
+    .join("");
+
+  return `<section style="${style({
+    margin: `${preset.rhythm.sectionGap} 0`,
+    padding: "12px 14px",
+    background: preset.palette.secondary,
+    border: "1px solid #e2e5ea",
+    "border-radius": "8px",
+    ...toInlineOverride(block.style),
+  })}">${languageLabel ? `<span style="${style({
+    display: "inline-block",
+    color: preset.palette.textSub,
+    "font-size": "12px",
+    "margin-bottom": "8px",
+  })}">${escapeHtml(languageLabel)}</span>` : ""}${body}</section>`;
 }
 
 function renderDivider(preset: StylePreset, block: ArticleBlock): string {

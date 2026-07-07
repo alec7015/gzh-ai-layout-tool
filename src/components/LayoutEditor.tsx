@@ -118,16 +118,19 @@ export default function LayoutEditor({
         buildOrnamentRequest(article.meta.title, preset.palette)
       );
       const rawSvg = result.ok ? result.data : fallbackOrnamentSvg(preset);
-      const sanitized = sanitizeSvg(rawSvg);
+      let sanitized = sanitizeSvg(rawSvg);
       if (!sanitized.ok) {
-        setOrnamentStatus(sanitized.reason);
-        return;
+        sanitized = sanitizeSvg(fallbackOrnamentSvg(preset));
+        if (!sanitized.ok) {
+          setOrnamentStatus(sanitized.reason);
+          return;
+        }
       }
       const src = await svgToPngDataUrl(sanitized.svg);
       const chain = editor.chain().focus() as ReturnType<Editor["chain"]> & {
         setImage(attrs: { src: string; alt?: string }): { run(): boolean };
       };
-      chain.setImage({ src, alt: "AI 装饰图" }).run();
+      chain.setImage({ src, alt: "" }).run();
       setOrnamentStatus(result.ok ? "已插入装饰图。" : `${result.message} 已插入本地装饰图。`);
     } catch {
       setOrnamentStatus("装饰图生成失败，请稍后重试。");

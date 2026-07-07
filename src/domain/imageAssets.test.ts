@@ -11,13 +11,14 @@ describe("imageAssets", () => {
 
   it("creates and appends image blocks", () => {
     const article = createSampleArticle();
-    const next = appendImageBlock(article, "data:image/png;base64,abc", "配图");
+    const next = appendImageBlock(article, "data:image/png;base64,abc");
     const image = next.blocks.at(-1);
 
     expect(next.blocks).toHaveLength(article.blocks.length + 1);
     expect(image?.type).toBe("image");
     expect(image?.id).toMatch(/^image-/);
     expect(image && "src" in image ? image.src : "").toBe("data:image/png;base64,abc");
+    expect(image && "caption" in image ? image.caption : undefined).toBe("");
   });
 
   it("round trips markdown image syntax through draft text", () => {

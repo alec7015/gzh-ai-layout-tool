@@ -7,28 +7,32 @@ export type BlockType =
   | "image"
   | "imageGrid"
   | "table"
+  | "code"
   | "divider";
 
 export type TextMark = "bold" | "italic" | "emphasis" | "underline" | "strike" | "keyword";
 
 export type BlockOverride = Record<string, string | number | boolean | null>;
-export type BlockRole =
-  | "summary"
-  | "tip"
-  | "pullquote"
-  | "quoteCenter"
-  | "data"
-  | "step"
-  | "toolLabel"
-  | "sidenote"
-  | "editorNote"
-  | "toc"
-  | "signature"
-  | "lead"
-  | "keyQuote"
-  | "emphasis"
-  | "steps"
-  | "imageSlot";
+
+export const V13_BLOCK_ROLES = [
+  "summary",
+  "tip",
+  "pullquote",
+  "quoteCenter",
+  "data",
+  "step",
+  "toolLabel",
+  "sidenote",
+  "editorNote",
+  "toc",
+  "signature",
+] as const;
+
+export const LEGACY_BLOCK_ROLES = ["lead", "keyQuote", "emphasis", "steps", "imageSlot"] as const;
+
+export const BLOCK_ROLES = [...V13_BLOCK_ROLES, ...LEGACY_BLOCK_ROLES] as const;
+
+export type BlockRole = (typeof BLOCK_ROLES)[number];
 
 export type ArticleType = "tutorial" | "review" | "opinion" | "news" | "listicle" | "generic";
 
@@ -118,6 +122,12 @@ export interface TableBlock extends BaseBlock {
   rows: TableRow[];
 }
 
+export interface CodeBlock extends BaseBlock {
+  type: "code";
+  text: string;
+  language?: string;
+}
+
 export interface DividerBlock extends BaseBlock {
   type: "divider";
 }
@@ -131,6 +141,7 @@ export type ArticleBlock =
   | ImageBlock
   | ImageGridBlock
   | TableBlock
+  | CodeBlock
   | DividerBlock;
 
 export interface ArticleAst {

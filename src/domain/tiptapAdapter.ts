@@ -1,6 +1,7 @@
-import type { ArticleAst, ArticleBlock, BlockOverride, BlockRole, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
+import { BLOCK_ROLES, type ArticleAst, type ArticleBlock, type BlockOverride, type BlockRole, type GridImage, type GridLayout, type TableRow, type TextMark, type TextRun } from "./types";
 
 const MAX_TITLE_LENGTH = 120;
+const BLOCK_ROLE_SET = new Set<string>(BLOCK_ROLES);
 
 export type TiptapNode = {
   type: string;
@@ -103,7 +104,7 @@ function blockToNode(block: ArticleBlock): TiptapNode {
       attrs: {
         ...blockAttrs(block),
         src: block.src,
-        alt: block.caption ?? "配图",
+        alt: block.caption ?? "",
       },
     };
   }
@@ -135,6 +136,17 @@ function blockToNode(block: ArticleBlock): TiptapNode {
     };
   }
 
+  if (block.type === "code") {
+    return {
+      type: "codeBlock",
+      attrs: {
+        ...blockAttrs(block),
+        language: block.language ?? null,
+      },
+      content: block.text ? [{ type: "text", text: block.text }] : undefined,
+    };
+  }
+
   return { type: "horizontalRule", attrs: blockAttrs(block) };
 }
 
@@ -161,7 +173,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       id: blockIdFromNode(node, "image", index),
       type: "image",
       src: typeof node.attrs?.src === "string" ? node.attrs.src : "",
-      caption: typeof node.attrs?.alt === "string" ? node.attrs.alt : "配图",
+      caption: typeof node.attrs?.alt === "string" ? node.attrs.alt : "",
       style: styleFromNode(node),
       role: roleFromNode(node),
       roleHint: roleHintFromNode(node),
@@ -176,7 +188,7 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
         id: blockIdFromNode(node, "image", index),
         type: "image",
         src: image[2],
-        caption: image[1] || "配图",
+        caption: image[1] ?? "",
         style: styleFromNode(node),
         role: roleFromNode(node),
         roleHint: roleHintFromNode(node),
@@ -236,6 +248,18 @@ function nodeToBlock(node: TiptapNode, index: number): ArticleBlock | null {
       id: blockIdFromNode(node, "table", index),
       type: "table",
       rows: tableRowsFromNode(node),
+      style: styleFromNode(node),
+      role: roleFromNode(node),
+      roleHint: roleHintFromNode(node),
+    };
+  }
+
+  if (node.type === "codeBlock") {
+    return {
+      id: blockIdFromNode(node, "code", index),
+      type: "code",
+      text: inlineText(node),
+      ...(typeof node.attrs?.language === "string" && node.attrs.language ? { language: node.attrs.language } : {}),
       style: styleFromNode(node),
       role: roleFromNode(node),
       roleHint: roleHintFromNode(node),
@@ -335,11 +359,16 @@ function nodeToPlainText(node: TiptapNode): string {
 
   if (node.type === "imageGrid") {
     const images = Array.isArray(node.attrs?.images) ? node.attrs.images as Array<{ src: string; alt?: string }> : [];
-    return images.map((image) => `![${image.alt ?? "配图"}](${image.src})`).join("\n");
+    return images.map((image) => `![${image.alt ?? ""}](${image.src})`).join("\n");
   }
 
   if (node.type === "table") {
     return tableToMarkdown(tableRowsFromNode(node));
+  }
+
+  if (node.type === "codeBlock") {
+    const language = typeof node.attrs?.language === "string" ? node.attrs.language : "";
+    return `\`\`\`${language}\n${inlineText(node)}\n\`\`\``;
   }
 
   if (node.type === "horizontalRule") {
@@ -433,15 +462,7 @@ function roleHintFromNode(node: TiptapNode): string | undefined {
 }
 
 function isBlockRole(value: unknown): value is BlockRole {
-  return (
-    value === "lead" ||
-    value === "keyQuote" ||
-    value === "emphasis" ||
-    value === "steps" ||
-    value === "summary" ||
-    value === "tip" ||
-    value === "imageSlot"
-  );
+  return typeof value === "string" && BLOCK_ROLE_SET.has(value);
 }
 
 function blockIdFromNode(node: TiptapNode, type: string, index: number): string {

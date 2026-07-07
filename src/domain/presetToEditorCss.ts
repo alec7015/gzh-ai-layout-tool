@@ -99,6 +99,18 @@ ${scope} th {
   background: ${preset.palette.primary}14;
   color: ${preset.palette.textMain};
 }
+${scope} pre {
+  margin: ${preset.rhythm.paragraphGap} 0;
+  padding: 12px 14px;
+  background: ${preset.palette.secondary};
+  border: 1px solid #e2e5ea;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+${scope} pre code {
+  font-family: Menlo, Consolas, 'Courier New', monospace;
+  font-size: 13px;
+}
 ${scope} hr {
   margin: ${preset.rhythm.sectionGap} auto;
   border: 0;

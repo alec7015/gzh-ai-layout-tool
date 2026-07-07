@@ -12,6 +12,7 @@ describe("aiClient", () => {
   it("parses JSON from plain or fenced model output", () => {
     expect(safeJsonParse<{ ok: boolean }>('{"ok":true}')?.ok).toBe(true);
     expect(safeJsonParse<{ ok: boolean }>('```json\n{"ok":true}\n```')?.ok).toBe(true);
+    expect(safeJsonParse<{ ok: boolean }>('解释：{"ok":true,}')).toEqual({ ok: true });
     expect(safeJsonParse("not json")).toBeNull();
   });
 
@@ -163,5 +164,41 @@ describe("aiClient", () => {
     );
 
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).not.toHaveProperty("temperature");
+  });
+
+  it("returns precise parse errors and retries once with correction instructions", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '{"title":"断掉"' }, finish_reason: "length" }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: '{"title":"修复"}' } }] }),
+      });
+
+    const result = await callChatCompletionsJson<{ title: string }>(
+      { ...createDefaultAiSettings(), apiKey: "secret" },
+      { ...buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }), response_format: { type: "json_object" } },
+      fetchMock
+    );
+
+    expect(result).toEqual({ ok: true, data: { title: "修复" }, rawText: '{"title":"修复"}' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).messages.at(-1)).toMatchObject({
+      role: "user",
+      content: expect.stringContaining("修正为完整 JSON"),
+    });
+  });
+
+  it("classifies non-json parse failures without retry loops", async () => {
+    const result = await callChatCompletionsJson<{ title: string }>(
+      { ...createDefaultAiSettings(), apiKey: "secret" },
+      buildWritingRequest({ topic: "测试", style: "清晰", words: 500 }),
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ choices: [{ message: { content: "不是 JSON" } }] }) })
+    );
+
+    expect(result).toMatchObject({ ok: false, code: "parse-nonjson" });
   });
 });

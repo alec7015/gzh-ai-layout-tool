@@ -45,7 +45,7 @@ describe("draftStore", () => {
     expect(loadDraft(adapter).meta.title).toBe(article.meta.title);
   });
 
-  it("round trips structured markdown without losing headings, marks, images, grids, or tables", () => {
+  it("round trips structured markdown without losing headings, marks, images, grids, tables, or code", () => {
     const article: ArticleAst = {
       meta: { title: "结构化文章" },
       blocks: [
@@ -86,6 +86,7 @@ describe("draftStore", () => {
           ],
           style: {},
         },
+        { id: "code-1", type: "code", language: "ts", text: "const answer = 42;\n  console.log(answer);", style: {} },
       ],
     };
 
@@ -96,6 +97,7 @@ describe("draftStore", () => {
     expect(markdown).toContain("# 第一部分");
     expect(markdown).toContain("这是一段**重点**和*提示*");
     expect(markdown).toContain("1. 第一步");
+    expect(markdown).toContain("```ts\nconst answer = 42;\n  console.log(answer);\n```");
     expect(restored.blocks.map((block) => block.type)).toEqual([
       "title",
       "heading",
@@ -106,6 +108,7 @@ describe("draftStore", () => {
       "image",
       "image",
       "table",
+      "code",
     ]);
     expect(restored.blocks[2]).toMatchObject({
       type: "paragraph",
@@ -118,6 +121,17 @@ describe("draftStore", () => {
     });
     expect(restored.blocks[3]).toMatchObject({ type: "list", ordered: true });
     expect(restored.blocks[8]).toMatchObject({ type: "table" });
+    expect(restored.blocks[9]).toMatchObject({ type: "code", language: "ts", text: "const answer = 42;\n  console.log(answer);" });
+  });
+
+  it("keeps empty image alt text empty instead of inventing captions", () => {
+    const restored = markdownToAst("# 空图注\n\n![](data:image/png;base64,abc)", { strictHeadings: true });
+    const markdown = astToMarkdown(restored);
+    const text = astToPlainText(restored);
+
+    expect(restored.blocks[1]).toMatchObject({ type: "image", caption: "" });
+    expect(markdown).toContain("![](data:image/png;base64,abc)");
+    expect(text).toContain("![](data:image/png;base64,abc)");
   });
 
   it("uses explicit heading markers only in strict heading mode", () => {

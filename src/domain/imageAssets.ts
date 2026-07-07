@@ -4,7 +4,7 @@ export function isSupportedImageFile(file: File): boolean {
   return ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type);
 }
 
-export function createImageBlock(src: string, caption = "配图"): ImageBlock {
+export function createImageBlock(src: string, caption = ""): ImageBlock {
   return {
     id: `image-${Date.now()}`,
     type: "image",

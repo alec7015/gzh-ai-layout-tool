@@ -12,6 +12,8 @@ import type {
   StyleOverrides,
   StylePreset,
 } from "./types";
+import { BLOCK_ROLES, V13_BLOCK_ROLES } from "./types";
+import { isRoleCompatible } from "./roleMatrix";
 import { clampRolesToRecipe, getRecipe } from "./recipes";
 
 const allowedStyleIds = new Set(stylePresets.map((preset) => preset.id));
@@ -23,37 +25,8 @@ const allowedOverridePrefixes = [
   "decorations.footerText",
 ];
 const legacyComponentPrefix = /^(title|heading|quote|list|emphasis|divider|image)\./;
-const blockRoles: BlockRole[] = [
-  "lead",
-  "keyQuote",
-  "emphasis",
-  "steps",
-  "summary",
-  "tip",
-  "imageSlot",
-  "pullquote",
-  "quoteCenter",
-  "data",
-  "step",
-  "toolLabel",
-  "sidenote",
-  "editorNote",
-  "toc",
-  "signature",
-];
-const v13BlockRoles: BlockRole[] = [
-  "summary",
-  "tip",
-  "pullquote",
-  "quoteCenter",
-  "data",
-  "step",
-  "toolLabel",
-  "sidenote",
-  "editorNote",
-  "toc",
-  "signature",
-];
+const blockRoles: BlockRole[] = [...BLOCK_ROLES];
+const v13BlockRoles: BlockRole[] = [...V13_BLOCK_ROLES];
 const roleQuota: Record<BlockRole, number> = {
   lead: 1,
   keyQuote: 2,
@@ -200,13 +173,14 @@ export function coerceLayoutPlan(
   article: ArticleAst,
   presets: StylePreset[] = stylePresets
 ): LayoutPlan[] | null {
-  if (!isRecord(value) || !Array.isArray(value.plans)) {
+  const normalized = salvagePlansShape(value);
+  if (!isRecord(normalized) || !Array.isArray(normalized.plans)) {
     return null;
   }
 
   const allowedPlanStyleIds = new Set(presets.map((preset) => preset.id));
   const blockMap = new Map(article.blocks.map((block) => [block.id, block]));
-  const plans = value.plans
+  const plans = normalized.plans
     .slice(0, 3)
     .map((item): LayoutPlan | null => {
       if (!isRecord(item) || typeof item.styleId !== "string" || !allowedPlanStyleIds.has(item.styleId)) {
@@ -233,31 +207,41 @@ export function coerceLayoutPlan(
 }
 
 export function coerceLayoutPlanV2(value: unknown, article: ArticleAst): LayoutPlanV2 | null {
-  if (!isRecord(value) || value.version !== 2 || !Array.isArray(value.blocks)) {
+  if (!isRecord(value) || value.version !== 2) {
+    return null;
+  }
+  const rawBlocks = Array.isArray(value.blocks)
+    ? value.blocks
+    : Array.isArray(value.blockRoles)
+      ? value.blockRoles
+      : null;
+  if (!rawBlocks) {
     return null;
   }
 
-  const articleType = isArticleType(value.articleType) ? value.articleType : "generic";
+  const articleTypeValue = value.articleType ?? value.article_type;
+  const articleType = isArticleType(articleTypeValue) ? articleTypeValue : "generic";
   const recipe = getRecipe(articleType);
   const seen = new Set<number>();
   const candidateBlocks: LayoutPlanV2["blocks"] = [];
 
-  for (const item of value.blocks) {
-    if (!isRecord(item) || typeof item.index !== "number" || !Number.isInteger(item.index)) {
+  for (const item of rawBlocks) {
+    const rawIndex = isRecord(item) ? item.index ?? item.blockIndex : undefined;
+    if (!isRecord(item) || typeof rawIndex !== "number" || !Number.isInteger(rawIndex)) {
       continue;
     }
-    if (item.index < 0 || item.index >= article.blocks.length || seen.has(item.index)) {
+    if (rawIndex < 0 || rawIndex >= article.blocks.length || seen.has(rawIndex)) {
       continue;
     }
-    seen.add(item.index);
-    const text = blockText(article.blocks[item.index]);
+    seen.add(rawIndex);
+    const text = blockText(article.blocks[rawIndex]);
     const role = isV13BlockRole(item.role) ? item.role : undefined;
     const keywords = coerceKeywords(item.keywords, text, recipe.keywordDensity.maxPerParagraph);
     if (!role && keywords.length === 0) {
       continue;
     }
     candidateBlocks.push({
-      index: item.index,
+      index: rawIndex,
       ...(role ? { role } : {}),
       ...(keywords.length ? { keywords } : {}),
     });
@@ -275,6 +259,28 @@ export function coerceLayoutPlanV2(value: unknown, article: ArticleAst): LayoutP
     enableToc: typeof value.enableToc === "boolean" ? value.enableToc : recipe.defaults.enableToc,
     ...(Object.keys(overrides).length ? { overrides } : {}),
   };
+}
+
+function salvagePlansShape(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return { plans: value };
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+  if (Array.isArray(value.plans)) {
+    return value;
+  }
+  if (Array.isArray(value.layouts)) {
+    return { ...value, plans: value.layouts };
+  }
+  if (isRecord(value.plan)) {
+    return { ...value, plans: [value.plan] };
+  }
+  if (typeof value.styleId === "string") {
+    return { plans: [value] };
+  }
+  return value;
 }
 
 function coerceKeywords(value: unknown, sourceText: string, limit: number): string[] {
@@ -374,7 +380,7 @@ function coercePlanBlocks(value: unknown, blockMap: Map<string, ArticleBlock>) {
       return;
     }
     const block = blockMap.get(item.blockId);
-    if (!block || !isRoleCompatible(item.role, block)) {
+    if (!block || !isRoleCompatible(item.role, block.type)) {
       return;
     }
     const currentCount = counts[item.role] ?? 0;
@@ -428,40 +434,6 @@ function blockText(block: ArticleBlock) {
     return `多图 ${block.images.length} 张`;
   }
   return "---";
-}
-
-function isRoleCompatible(role: BlockRole, block: ArticleBlock) {
-  if (role === "toc") {
-    return block.type === "paragraph";
-  }
-  if (role === "signature") {
-    return block.type === "paragraph";
-  }
-  if (role === "pullquote" || role === "quoteCenter") {
-    return block.type === "quote" || block.type === "paragraph";
-  }
-  if (role === "data" || role === "toolLabel" || role === "sidenote" || role === "editorNote") {
-    return block.type === "paragraph";
-  }
-  if (role === "step") {
-    return block.type === "list";
-  }
-  if (role === "lead") {
-    return block.type === "paragraph";
-  }
-  if (role === "keyQuote") {
-    return block.type === "quote" || block.type === "paragraph";
-  }
-  if (role === "emphasis") {
-    return block.type === "paragraph";
-  }
-  if (role === "steps") {
-    return block.type === "list";
-  }
-  if (role === "tip" || role === "imageSlot") {
-    return block.type === "paragraph";
-  }
-  return block.type === "paragraph" || block.type === "list";
 }
 
 function isPlanComponent(value: string): value is keyof NonNullable<LayoutPlan["components"]> {

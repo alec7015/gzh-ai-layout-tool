@@ -16,7 +16,7 @@ export interface ChatCompletionRequest {
   response_format?: { type: "json_object" };
   stream?: boolean;
   messages: Array<{
-    role: "system" | "user";
+    role: "system" | "user" | "assistant";
     content: string;
   }>;
 }

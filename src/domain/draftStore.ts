@@ -1,6 +1,7 @@
 import type { ArticleAst, ArticleBlock, TableRow, TextRun } from "./types";
 
 const DRAFT_KEY = "gzh-current-draft";
+const MAX_TITLE_LENGTH = 120;
 
 export interface DraftStorage {
   getItem(key: string): string | null;
@@ -61,12 +62,31 @@ export function markdownToAst(input: string, options: MarkdownParseOptions = {})
 
   const titleIndex = lines.findIndex(Boolean);
   const firstContentLine = titleIndex >= 0 ? lines[titleIndex] : "";
-  const title = stripHeadingMarker(firstContentLine) || "未命名草稿";
+  const titleParts = splitImportedTitle(stripHeadingMarker(firstContentLine));
+  const title = titleParts.title || "未命名草稿";
   const blocks: ArticleBlock[] = [{ id: createBlockId("title", 0), type: "title", text: title, style: {} }];
   let listItems: string[] = [];
   let orderedList = false;
+  let startIndex = Math.max(titleIndex + 1, 1);
+  if (titleParts.wasLong) {
+    const prefaceLines = titleParts.overflow ? [titleParts.overflow] : [];
+    let index = titleIndex + 1;
+    while (index < lines.length && lines[index]) {
+      prefaceLines.push(stripHeadingMarker(lines[index]));
+      index += 1;
+    }
+    if (prefaceLines.length > 0) {
+      blocks.push({
+        id: createBlockId("paragraph", titleIndex + 1),
+        type: "paragraph",
+        runs: parseRuns(prefaceLines.join("\n")),
+        style: {},
+      });
+    }
+    startIndex = index;
+  }
 
-  for (let index = Math.max(titleIndex + 1, 1); index < lines.length; index += 1) {
+  for (let index = startIndex; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line) {
       flushList(blocks, listItems, orderedList);
@@ -261,6 +281,19 @@ function createBlockId(type: string, index: number): string {
 
 function stripHeadingMarker(line: string): string {
   return line.replace(/^#{1,6}\s+/, "").trim();
+}
+
+function splitImportedTitle(text: string): { title: string; overflow: string; wasLong: boolean } {
+  const normalized = text.trim();
+  if (normalized.length < MAX_TITLE_LENGTH) {
+    return { title: normalized, overflow: "", wasLong: false };
+  }
+
+  return {
+    title: normalized.slice(0, MAX_TITLE_LENGTH).trimEnd(),
+    overflow: normalized.slice(MAX_TITLE_LENGTH).trimStart(),
+    wasLong: true,
+  };
 }
 
 function countHeadingLevel(line: string): 1 | 2 | 3 {

@@ -697,7 +697,7 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark">微</div>
           <div>
-            <strong>{activeArticle.meta.title}</strong>
+            <strong title={activeArticle.meta.title}>{activeArticle.meta.title}</strong>
             <span>
               已保存 · {wordCount} 字 · {recommendation.reason}
             </span>

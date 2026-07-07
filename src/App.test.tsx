@@ -9,7 +9,7 @@ describe("App", () => {
   });
 
   it("shows the core writing and layout workbench controls", () => {
-    render(<App />);
+    const { container } = render(<App />);
 
     expect(screen.getByRole("button", { name: "写作台" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "排版台" })).toBeInTheDocument();
@@ -21,6 +21,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "平板" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "桌面" })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("准备就绪");
+    expect(container.querySelector(".brand strong")).toHaveAttribute("title", "三个早起技巧");
   });
 
   it("shows the image grid insertion control in the writer workbench", async () => {

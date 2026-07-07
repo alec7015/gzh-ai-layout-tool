@@ -250,4 +250,26 @@ describe("tiptapAdapter", () => {
     expect(restored.blocks[0]).toMatchObject({ type: "title", text: "原标题" });
     expect(restored.blocks[1]).toMatchObject({ type: "paragraph" });
   });
+
+  it("splits overlong title node content into body paragraphs", () => {
+    const pasted = `标题首行${"很长".repeat(80)}\n正文第一段\n正文第二段`;
+    const restored = tiptapDocToAst(
+      {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1, blockId: "title-1", blockType: "title" },
+            content: [{ type: "text", text: pasted }],
+          },
+        ],
+      },
+      { meta: { title: "旧标题" }, blocks: [] }
+    );
+
+    expect(restored.meta.title.length).toBeLessThanOrEqual(120);
+    expect(restored.blocks[0]).toMatchObject({ type: "title" });
+    expect(restored.blocks[1]).toMatchObject({ type: "paragraph" });
+    expect(restored.blocks[1].type === "paragraph" ? restored.blocks[1].runs[0].text : "").toContain("正文第一段");
+  });
 });

@@ -132,7 +132,11 @@ button:disabled {
 }
 
 .brand strong {
+  max-width: min(620px, 52vw);
   font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand span {

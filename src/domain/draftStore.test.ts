@@ -128,6 +128,24 @@ describe("draftStore", () => {
     expect(loose.blocks[1]).toMatchObject({ type: "heading" });
   });
 
+  it("splits an overlong imported title into title and paragraph content", () => {
+    const longTitle = `${"这是一个非常长的标题".repeat(12)}\n第二段正文\n第三段正文`;
+    const article = plainTextToAst(longTitle);
+
+    expect(article.meta.title.length).toBeLessThanOrEqual(120);
+    expect(article.blocks[0]).toMatchObject({ type: "title" });
+    expect(article.blocks[1]).toMatchObject({ type: "paragraph" });
+    expect(article.blocks[1].type === "paragraph" ? article.blocks[1].runs[0].text : "").toContain("第二段正文");
+  });
+
+  it("does not create an empty paragraph for a title exactly at the limit", () => {
+    const exactTitle = "标".repeat(120);
+    const article = markdownToAst(exactTitle, { strictHeadings: true });
+
+    expect(article.meta.title).toBe(exactTitle);
+    expect(article.blocks).toHaveLength(1);
+  });
+
   it("preserves markdown heading levels from # to ###", () => {
     const restored = markdownToAst("# 主标题\n\n# 一级标题\n\n## 二级标题\n\n### 三级标题", {
       strictHeadings: true,

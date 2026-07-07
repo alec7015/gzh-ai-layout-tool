@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defaultStylePreset } from "./stylePresets";
+import { stylePresets } from "./stylePresets";
 import { mergeStylePreset } from "./styleEngine";
 import { renderWechatHtml } from "./wechatRenderer";
 import type { ArticleAst } from "./types";
@@ -142,5 +143,26 @@ describe("wechatRenderer", () => {
     expect(previewHtml).toContain("📷 建议配图：放一张产品对比图");
     expect(copyHtml).toContain("💡 提示");
     expect(copyHtml).not.toContain("建议配图");
+  });
+
+  it("keeps all preset and role render output compatible with WKWebView-safe inline HTML", () => {
+    const roleArticle: ArticleAst = {
+      meta: { title: "兼容扫描" },
+      blocks: [
+        { id: "title-1", type: "title", text: "兼容扫描", style: {} },
+        { id: "p-summary", type: "paragraph", runs: [{ text: "小结内容" }], role: "summary", style: {} },
+        { id: "p-tip", type: "paragraph", runs: [{ text: "提示内容" }], role: "tip", style: {} },
+        { id: "q-key", type: "quote", text: "关键引用", role: "keyQuote", style: {} },
+        { id: "divider-1", type: "divider", style: {} },
+      ],
+    };
+
+    const html = stylePresets.map((preset) => renderWechatHtml(roleArticle, preset, { includePlaceholders: true })).join("\n");
+
+    expect(html).not.toMatch(/url\(["']?data:image\/svg\+xml,[^"')]*[#<>"\s]/i);
+    expect(html).not.toMatch(/(?:color-mix|oklch|lab)\(/i);
+    expect(html).not.toContain("backdrop-filter");
+    expect(html).toContain("小结");
+    expect(html).toContain("💡 提示");
   });
 });

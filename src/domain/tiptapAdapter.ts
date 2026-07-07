@@ -1,5 +1,7 @@
 import type { ArticleAst, ArticleBlock, BlockOverride, BlockRole, GridImage, GridLayout, TableRow, TextMark, TextRun } from "./types";
 
+const MAX_TITLE_LENGTH = 120;
+
 export type TiptapNode = {
   type: string;
   attrs?: Record<string, unknown>;
@@ -476,15 +478,16 @@ function isGridLayout(value: unknown): value is GridLayout {
 
 function ensureTitleFirst(blocks: ArticleBlock[], previous?: ArticleAst): ArticleBlock[] {
   const titleIndex = blocks.findIndex((block) => block.type === "title");
+  const normalize = (items: ArticleBlock[]) => normalizeTitleBlock(items, previous);
   if (titleIndex === 0) {
-    return blocks;
+    return normalize(blocks);
   }
   if (titleIndex > 0) {
     const title = blocks[titleIndex];
-    return [title, ...blocks.slice(0, titleIndex), ...blocks.slice(titleIndex + 1)];
+    return normalize([title, ...blocks.slice(0, titleIndex), ...blocks.slice(titleIndex + 1)]);
   }
 
-  return [
+  return normalize([
     {
       id: "title-1",
       type: "title",
@@ -492,5 +495,34 @@ function ensureTitleFirst(blocks: ArticleBlock[], previous?: ArticleAst): Articl
       style: {},
     },
     ...blocks,
-  ];
+  ]);
+}
+
+function normalizeTitleBlock(blocks: ArticleBlock[], previous?: ArticleAst): ArticleBlock[] {
+  const [titleBlock, ...rest] = blocks;
+  if (!titleBlock || titleBlock.type !== "title") {
+    return blocks;
+  }
+
+  const raw = titleBlock.text.trim();
+  const [firstLine = "", ...followingLines] = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const sourceTitle = firstLine || previous?.meta.title || "未命名草稿";
+  const title = sourceTitle.length > MAX_TITLE_LENGTH ? sourceTitle.slice(0, MAX_TITLE_LENGTH).trimEnd() : sourceTitle;
+  const overflow = [
+    sourceTitle.slice(title.length).trimStart(),
+    ...followingLines,
+  ].filter(Boolean);
+  if (overflow.length === 0 && title === titleBlock.text) {
+    return blocks;
+  }
+
+  const overflowBlocks: ArticleBlock[] = overflow.length > 0
+    ? [{
+        id: createBlockId("paragraph", 0),
+        type: "paragraph",
+        runs: [{ text: overflow.join("\n") }],
+        style: {},
+      }]
+    : [];
+  return [{ ...titleBlock, text: title }, ...overflowBlocks, ...rest];
 }
